@@ -1,0 +1,40 @@
+apply plugin: 'com.android.application'
+
+// every GitHub build gets a higher version, so it installs as an update
+def ciRun = (System.getenv('GITHUB_RUN_NUMBER') ?: '0').toInteger()
+
+android {
+    namespace 'app.hotshot.chat'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'app.hotshot.chat'
+        minSdk 26
+        targetSdk 34
+        versionCode 1000 + ciRun
+        versionName '1.0.' + ciRun
+    }
+
+    // An update installs over the old version only when both carry the same certificate.
+    // The key is never in the repository: the workflow writes it from repository secrets.
+    def key = file('signing.p12')
+    signingConfigs {
+        fixed {
+            storeFile key
+            storeType 'pkcs12'
+            storePassword System.getenv('SIGNING_PASSWORD')
+            keyAlias 'hotshot'
+            keyPassword System.getenv('SIGNING_PASSWORD')
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig key.exists() ? signingConfigs.fixed : signingConfigs.debug
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

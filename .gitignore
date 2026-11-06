@@ -1,0 +1,28 @@
+# the signing key must never reach the repository
+*.p12
+*.jks
+*.keystore
+SIGNING_*
+HotShot-keys/
+
+# data the program creates next to itself
+data/
+.devdata/
+
+# builds
+*.apk
+*.exe
+__pycache__/
+desktop/build/
+desktop/dist/
+desktop/*.spec
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+.claude/
+
+# the first demos stay on the laptop
+V1.py
+V2_pol_chat.py
+WThiN.jpg

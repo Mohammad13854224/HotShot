@@ -1,0 +1,2 @@
+rootProject.name = 'HotShot'
+include ':app'

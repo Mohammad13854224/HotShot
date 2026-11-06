@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">HotShot</string>
+    <string name="channel">File transfers</string>
+    <string name="moving">Moving files…</string>
+</resources>

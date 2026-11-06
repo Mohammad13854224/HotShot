@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="color-scheme" content="light dark">
+<title>HotShot</title>
+<link rel="icon" href="/static/logo.png" type="image/png">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div id="app" class="idle">
+ <aside id="side">
+  <div class="bar sidebar-bar">
+   <button class="ib" id="menu" aria-label="منو"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+   <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>
+    <input id="q" type="search" placeholder="جستجو" aria-label="جستجو در گفتگوها و پیام‌ها" autocomplete="off"></label>
+  </div>
+  <div id="link" class="link"></div>
+  <ul id="chatlist"></ul>
+  <button class="fab" id="newchat" aria-label="گفتگوی جدید" title="گفتگوی جدید"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+ </aside>
+ <section id="room">
+  <div id="none"><div class="hero"><img src="/static/logo.png" alt=""><h2>HotShot</h2><p data-t>فایل‌هات رو شلیک کن. اینترنت لازم نیست.</p><span class="none-pill" data-t>یک گفتگو را انتخاب کنید</span></div></div>
+  <div class="bar" id="rbar">
+   <button class="ib back" id="back" aria-label="بازگشت"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+   <button class="head" id="head" aria-label="اطلاعات گفتگو">
+    <span class="av" id="hav"></span>
+    <span class="head-t"><strong id="title"></strong><small id="sub"></small></span>
+   </button>
+   <button class="ib" id="rmenu" aria-label="گزینه‌ها"><svg viewBox="0 0 24 24" class="solid"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg></button>
+  </div>
+  <button id="notice" hidden></button>
+  <div id="msgs"></div>
+  <button id="down" class="ib" hidden aria-label="رفتن به آخرین پیام"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+  <div id="composer">
+   <div id="tray" hidden></div>
+   <div class="row">
+    <div class="box">
+     <button class="ib" id="attach" aria-label="افزودن فایل" title="افزودن فایل"><svg viewBox="0 0 24 24"><path d="M21 12l-8.5 8.5a5 5 0 0 1-7-7L14 5a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.7-7.7"/></svg></button>
+     <input type="file" id="file" multiple hidden>
+     <textarea id="ta" rows="1" dir="auto" placeholder="پیام" aria-label="پیام"></textarea>
+    </div>
+    <button class="ib send" id="send" aria-label="ارسال" disabled><svg viewBox="0 0 24 24" class="solid"><path d="M3.4 20.4l17.5-7.5a1 1 0 0 0 0-1.8L3.4 3.6a1 1 0 0 0-1.4 1.2L4.5 11l9 1-9 1-2.5 6.2a1 1 0 0 0 1.4 1.2z"/></svg></button>
+   </div>
+  </div>
+ </section>
+</div>
+<div id="pm" hidden></div>
+<div id="dlg" hidden></div>
+<div id="lb" hidden>
+ <div class="lb-bar">
+  <button class="ib" id="lbclose" aria-label="بستن"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <span id="lbname" dir="auto"></span>
+  <button class="ib" id="lbsave" aria-label="نمایش فایل"><svg viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg></button>
+ </div>
+ <div id="lbbody"></div>
+</div>
+<div id="toast" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

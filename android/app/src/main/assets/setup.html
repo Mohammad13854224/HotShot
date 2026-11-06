@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>HotShot</title>
+<style>
+@font-face{font-family:Vazirmatn;src:url(vazirmatn-arabic-wght-normal.woff2) format("woff2");font-weight:100 900;unicode-range:U+0600-06FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFC}
+@font-face{font-family:Vazirmatn;src:url(vazirmatn-latin-wght-normal.woff2) format("woff2");font-weight:100 900;unicode-range:U+0000-00FF,U+2000-206F}
+:root{--bg:#fff;--ink:#0f1419;--muted:#707991;--line:#e4e6ea;--accent:#3390ec;--danger:#e53935;color-scheme:light}
+:root[data-theme=dark]{--bg:#212121;--ink:#f3f4f6;--muted:#a0a4ac;--line:#3c3c3e;--accent:#8774e1;--danger:#ff6b63;color-scheme:dark}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.7 Vazirmatn,sans-serif;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+main{width:100%;max-width:360px;text-align:center}
+.logo{display:block;width:112px;height:112px;margin:0 auto 14px}
+h1{font-size:22px;margin:0 0 6px}
+p{margin:0 0 20px;color:var(--muted);font-size:14.5px}
+#status{min-height:24px;font-size:14px;color:var(--muted);margin-bottom:12px}
+#status.found{color:var(--accent);font-weight:600}
+#status.err{color:var(--danger)}
+input{display:block;width:100%;height:50px;border:1.5px solid var(--line);border-radius:12px;background:none;color:inherit;font:inherit;padding:0 14px;outline:0;margin-bottom:12px;text-align:center;direction:ltr}
+input:focus{border-color:var(--accent)}
+#code{font-size:24px;font-weight:700;letter-spacing:6px}
+button{width:100%;height:50px;border:0;border-radius:12px;background:var(--accent);color:#fff;font:inherit;font-weight:700}
+button:disabled{opacity:.45}
+.link{background:none;color:var(--accent);height:40px;margin-top:6px;font-weight:400;font-size:14px}
+#lang{position:fixed;top:12px;inset-inline-end:12px;width:auto;height:36px;padding:0 14px;margin:0;background:none;color:var(--accent);border:1.5px solid var(--line);font-size:13.5px;font-weight:600}
+ol{text-align:start;color:var(--muted);font-size:14px;padding-inline-start:20px;margin:0 0 18px}
+[hidden]{display:none!important}
+.dots::after{content:"";animation:d 1.4s steps(4,end) infinite}
+@keyframes d{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+</style>
+</head>
+<body>
+<button id="lang"></button>
+<main>
+ <img class="logo" src="logo.png" alt="">
+ <section id="wait" hidden>
+  <h1 data-t="seekTitle"></h1>
+  <p class="dots" data-t="seekHint"></p>
+  <button class="link" id="reset" data-t="repair"></button>
+ </section>
+ <section id="pair" hidden>
+  <h1 data-t="pairTitle"></h1>
+  <ol>
+   <li data-t="step1"></li>
+   <li data-t="step2"></li>
+   <li data-t="step3"></li>
+  </ol>
+  <div id="status" class="dots"></div>
+  <input id="host" placeholder="192.168.43.20:47800" inputmode="url" autocomplete="off" hidden>
+  <input id="code" placeholder="00000000" inputmode="numeric" maxlength="8" autocomplete="off">
+  <button id="go" disabled data-t="connect"></button>
+  <button class="link" id="manual" data-t="manual"></button>
+ </section>
+</main>
+<script>
+const TEXT={
+ fa:{seekTitle:'در جستجوی کامپیوتر',seekHint:'هات‌اسپات را روشن نگه دارید و برنامه را روی کامپیوتر باز کنید',repair:'جفت‌سازی دوباره',pairTitle:'وصل کردن به کامپیوتر',
+  step1:'هات‌اسپات گوشی را روشن کنید و کامپیوتر را به آن وصل کنید.',step2:'برنامه را روی کامپیوتر باز کنید و «اتصال گوشی» را بزنید.',step3:'کد ۸ رقمی را این‌جا وارد کنید.',
+  connect:'وصل شو',manual:'آدرس را خودم وارد می‌کنم',seeking:'در جستجوی کامپیوتر',found:'پیدا شد: ',working:'در حال اتصال…',badCode:'کد درست نیست. کد تازه را از روی کامپیوتر بخوانید.',badNet:'به کامپیوتر وصل نشد. فایروال ویندوز را بررسی کنید.',hostLabel:'آدرس کامپیوتر',codeLabel:'کد جفت‌سازی'},
+ en:{seekTitle:'Looking for your computer',seekHint:'Keep the hotspot on and open HotShot on the computer',repair:'Pair again',pairTitle:'Connect to your computer',
+  step1:'Turn on the phone\'s hotspot and connect the computer to it.',step2:'Open HotShot on the computer and choose “Connect phone”.',step3:'Enter the 8-digit code here.',
+  connect:'Connect',manual:'I\'ll type the address myself',seeking:'Looking for your computer',found:'Found: ',working:'Connecting…',badCode:'Wrong code. Read the new code from the computer.',badNet:'Could not reach the computer. Check Windows Firewall.',hostLabel:'Computer address',codeLabel:'Pairing code'}};
+const read=(k,d)=>{try{const v=Native.getValue(k);return v==null?d:JSON.parse(v)}catch{return d}};
+const lang=read('lang','fa'),T=TEXT[lang]||TEXT.fa,theme=read('theme','auto');
+const dark=theme==='dark'||(theme==='auto'&&matchMedia('(prefers-color-scheme:dark)').matches);
+document.documentElement.dataset.theme=dark?'dark':'light';document.documentElement.lang=lang;document.documentElement.dir=lang==='fa'?'rtl':'ltr';
+Native.theme(dark);
+const $=s=>document.querySelector(s),st=$('#status'),code=$('#code'),hostIn=$('#host'),go=$('#go');
+document.querySelectorAll('[data-t]').forEach(e=>e.textContent=T[e.dataset.t]);
+hostIn.setAttribute('aria-label',T.hostLabel);code.setAttribute('aria-label',T.codeLabel);
+st.textContent=T.seeking;
+$('#lang').textContent=lang==='fa'?'English':'فارسی';
+$('#lang').onclick=()=>{Native.setValue('lang',JSON.stringify(lang==='fa'?'en':'fa'));location.reload()};
+let target=null,working=false;
+const fa2en=s=>s.replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+function address(){
+  if(!hostIn.hidden){const m=fa2en(hostIn.value.trim()).match(/^([\d.]+)(?::(\d+))?$/);return m?{host:m[1],port:m[2]||'47800'}:null}
+  return target;
+}
+function check(){go.disabled=working||code.value.length!==8||!address()}
+function say(t,c){st.textContent=t;st.className=c||''}
+code.oninput=()=>{code.value=fa2en(code.value).replace(/\D/g,'');check()};
+hostIn.oninput=check;
+$('#manual').onclick=()=>{hostIn.hidden=false;$('#manual').hidden=true;hostIn.focus();check()};
+$('#reset').onclick=()=>{Native.unpair();show()};
+go.onclick=()=>{const a=address();if(!a)return;working=true;check();say(T.working);Native.pair(a.host,a.port,code.value)};
+window.onNative=ev=>{
+  if(ev.t==='found'&&!working){target={host:ev.host,port:String(ev.port)};say(T.found+ev.name,'found');check()}
+  else if(ev.t==='pairfail'){working=false;code.value='';check();say(ev.why==='code'?T.badCode:T.badNet,'err')}
+};
+function show(){const p=Native.paired();$('#wait').hidden=!p;$('#pair').hidden=p}
+show();
+</script>
+</body>
+</html>

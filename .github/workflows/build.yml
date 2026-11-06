@@ -1,0 +1,145 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*'] # a version tag also publishes the APK and EXE as a release
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install -r desktop/requirements.txt
+      - run: python tests/test_server.py
+        env:
+          PYTHONUTF8: '1'
+
+  exe:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install -r desktop/requirements.txt pyinstaller
+      - name: Build portable EXE
+        working-directory: desktop
+        run: pyinstaller --onefile --noconsole --name HotShot --icon icon.ico --add-data "web;web" --collect-submodules cryptography --hidden-import tkinter hotshot.py
+      # a windowed exe swallows crashes, so prove the packed program really serves its page
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $p = Start-Process desktop/dist/HotShot.exe -ArgumentList '--no-window','--data','smoke' -PassThru
+          $ok = $false
+          foreach ($i in 1..30) {
+            Start-Sleep 1
+            if (Test-Path smoke/run.json) { $ok = $true; break }
+          }
+          if (-not $ok) { Stop-Process $p -Force; throw 'exe did not start' }
+          Start-Sleep 2
+          $url = (Get-Content smoke/run.json | ConvertFrom-Json).url
+          $s = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+          $page = Invoke-WebRequest $url -WebSession $s -UseBasicParsing
+          Stop-Process $p -Force
+          if ($page.Content -notmatch 'app\.js') { throw 'page not served' }
+      - uses: actions/upload-artifact@v5
+        with:
+          name: hotshot-exe
+          path: desktop/dist/HotShot.exe
+          if-no-files-found: error
+
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      # the runner already has the Android SDK with accepted licences; only its location is needed
+      - name: Point to preinstalled Android SDK
+        run: |
+          echo "ANDROID_SDK_ROOT=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+          echo "ANDROID_HOME=/usr/local/lib/android/sdk" >> $GITHUB_ENV
+
+      # the signing key lives only in the repository's secrets (Settings > Secrets > Actions: SIGNING_KEY = the key
+      # file in base64, SIGNING_PASSWORD = its password); a fork or a pull request has no access to them and gets a
+      # throwaway debug key
+      - name: Signing key
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          if [ -n "$SIGNING_KEY" ] && [ -n "$SIGNING_PASSWORD" ]; then
+            echo "$SIGNING_KEY" | base64 -d > android/app/signing.p12
+            echo "SIGNED=1" >> $GITHUB_ENV
+          else
+            echo "::warning title=signing::signing secrets missing: built with a throwaway debug key (updates will not install over it)"
+          fi
+
+      - name: Build APK
+        working-directory: android
+        env:
+          SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          set +e
+          ./gradlew assembleRelease --no-daemon --stacktrace > /tmp/gradle.txt 2>&1
+          code=$?
+          tail -n 80 /tmp/gradle.txt
+          if [ $code -ne 0 ]; then
+            msg=$( (grep -n -m1 -B2 -A25 'What went wrong' /tmp/gradle.txt; grep -n 'error:' /tmp/gradle.txt | head -20) | head -c 6000 | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error title=gradle log::$msg"
+          fi
+          exit $code
+
+      # an update installs over the previous version only when both carry the same certificate: stop here if it changed
+      - name: Check the signing certificate
+        if: env.SIGNED == '1'
+        working-directory: android
+        env:
+          CERT_SHA256: a8e56a77fd9a69518f7061ffac6f1074dbf54d810e6c9c26bae67a0300fcebac
+        run: |
+          tools=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
+          certs=$($tools/apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk)
+          echo "$certs"
+          echo "$certs" | grep -qi "SHA-256 digest: $CERT_SHA256" || { echo "::error title=signing::the APK is not signed with the fixed key: it would not install over the installed app"; exit 1; }
+
+      - name: Name the APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk HotShot.apk
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: hotshot-apk
+          path: HotShot.apk
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [exe, apk]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            HotShot.apk
+            HotShot.exe
+          generate_release_notes: true

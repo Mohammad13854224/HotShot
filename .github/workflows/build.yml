@@ -32,14 +32,26 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r desktop/requirements.txt pyinstaller
-      - name: Build portable EXE
+      - name: Build the program
         working-directory: desktop
-        run: pyinstaller --onefile --noconsole --name HotShot --icon icon.ico --add-data "web;web" --collect-submodules cryptography --hidden-import tkinter hotshot.py
-      # a windowed exe swallows crashes, so prove the packed program really serves its page
-      - name: Smoke test
+        run: pyinstaller --onedir --noconsole --name HotShot --icon icon.ico --add-data "web;web" --collect-submodules cryptography --hidden-import tkinter hotshot.py
+      - name: Build the installer
         shell: pwsh
         run: |
-          $p = Start-Process desktop/dist/HotShot.exe -ArgumentList '--no-window','--data','smoke' -PassThru
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { "0.0.$env:GITHUB_RUN_NUMBER" }
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" desktop/installer.iss
+          if ($LASTEXITCODE -ne 0) { throw 'installer failed' }
+      # a windowed exe swallows crashes, so install it the way a user would and prove the installed program serves its page
+      - name: Install and smoke test
+        shell: pwsh
+        run: |
+          $setup = Start-Process desktop/dist/HotShot-Setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -PassThru -Wait
+          if ($setup.ExitCode -ne 0) { throw "setup exited with $($setup.ExitCode)" }
+          $exe = "$env:ProgramFiles\HotShot\HotShot.exe"
+          if (-not (Test-Path $exe)) { throw 'not installed' }
+          if (-not (netsh advfirewall firewall show rule name=HotShot | Select-String 'HotShot')) { throw 'no firewall rule' }
+          $p = Start-Process $exe -ArgumentList '--no-window','--data',"$PWD\smoke" -PassThru
           $ok = $false
           foreach ($i in 1..30) {
             Start-Sleep 1
@@ -55,7 +67,7 @@ jobs:
       - uses: actions/upload-artifact@v5
         with:
           name: hotshot-exe
-          path: desktop/dist/HotShot.exe
+          path: desktop/dist/HotShot-Setup.exe
           if-no-files-found: error
 
   apk:
@@ -141,5 +153,5 @@ jobs:
         with:
           files: |
             HotShot.apk
-            HotShot.exe
+            HotShot-Setup.exe
           generate_release_notes: true

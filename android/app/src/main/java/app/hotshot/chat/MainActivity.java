@@ -2,9 +2,13 @@ package app.hotshot.chat;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ActivityNotFoundException;
 import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ContentResolver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.res.AssetFileDescriptor;
 import android.database.Cursor;
 import android.net.Uri;
 import android.net.http.SslCertificate;
@@ -15,6 +19,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Parcelable;
 import android.provider.DocumentsContract;
+import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.view.View;
 import android.view.Window;
@@ -30,8 +35,12 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import javax.net.ssl.HttpsURLConnection;
@@ -154,7 +163,7 @@ public class MainActivity extends Activity {
 
     /** The chosen theme can differ from the system's, so the system bars follow the page. */
     private void paintBars(boolean dark) {
-        int color = dark ? 0xff212121 : 0xffffffff;
+        int color = dark ? 0xff0b0c20 : 0xffffffff;
         Window w = getWindow();
         w.setStatusBarColor(color);
         w.setNavigationBarColor(color);
@@ -258,6 +267,28 @@ public class MainActivity extends Activity {
             return true;
         }
 
+        /** "/local/<file id>" is this phone's own copy, so the viewer needs neither the laptop nor a second download. */
+        @Override
+        public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+            Uri u = request.getUrl();
+            String path = u.getPath();
+            if (path == null || !path.startsWith("/local/") || u.getHost() == null || !u.getHost().equals(prefs.host())) {
+                return null;
+            }
+            String v = prefs.local(path.substring(7));
+            if (v == null) {
+                return null;
+            }
+            try {
+                Uri file = Uri.parse(v.substring(2));
+                InputStream in = getContentResolver().openInputStream(file);
+                String mime = getContentResolver().getType(file);
+                return in == null ? null : new WebResourceResponse(mime == null ? "image/jpeg" : mime, null, in);
+            } catch (IOException | RuntimeException e) {
+                return null;    // moved or deleted: the page falls back to the laptop's copy
+            }
+        }
+
         @Override
         public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
             if (request.isForMainFrame()) {
@@ -290,14 +321,16 @@ public class MainActivity extends Activity {
             } else if (data.getData() != null) {
                 uris.add(data.getData());
             }
+            Set<Uri> durable = new HashSet<>();
             for (Uri u : uris) {
                 try {
                     getContentResolver().takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    durable.add(u);
                 } catch (RuntimeException ignored) {
                     // still readable for now; it only cannot be reopened after a restart
                 }
             }
-            emit("picked", "items", describe(uris));
+            emit("picked", "items", describe(uris, durable));
         } else if (request == PICK_FOLDER && data.getData() != null && folderKey != null) {
             Uri tree = data.getData();
             getContentResolver().takePersistableUriPermission(tree,
@@ -307,7 +340,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private JSONArray describe(List<Uri> uris) {
+    private JSONArray describe(List<Uri> uris, Set<Uri> durable) {
         JSONArray out = new JSONArray();
         ContentResolver cr = getContentResolver();
         for (Uri u : uris) {
@@ -328,6 +361,13 @@ public class MainActivity extends Activity {
                 // a provider without metadata; handled by the size check below
             }
             if (size < 0) {
+                try (AssetFileDescriptor a = cr.openAssetFileDescriptor(u, "r")) {
+                    size = a == null ? -1 : a.getLength();
+                } catch (IOException | RuntimeException ignored) {
+                    // handled by the size check below
+                }
+            }
+            if (size < 0) {
                 continue;       // the server must know the size up front
             }
             String mime = cr.getType(u);
@@ -335,7 +375,7 @@ public class MainActivity extends Activity {
                 mime = "application/octet-stream";
             }
             String key = UUID.randomUUID().toString();
-            transfers.picked.put(key, new Transfers.Picked(u, name, size, mime));
+            transfers.picked.put(key, new Transfers.Picked(u, name, size, mime, durable.contains(u)));
             try {
                 JSONObject o = new JSONObject();
                 o.put("key", key);
@@ -382,7 +422,7 @@ public class MainActivity extends Activity {
             }
         }
         if (!uris.isEmpty()) {
-            sharedItems = describe(uris);
+            sharedItems = describe(uris, Collections.emptySet());
         }
     }
 
@@ -390,6 +430,49 @@ public class MainActivity extends Activity {
         if (sharedItems != null && onApp) {
             emit("shared", "items", sharedItems);
             sharedItems = null;
+        }
+    }
+
+    private static Intent content(String type, String... types) {
+        Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType(type);
+        if (types.length > 0) {
+            i.putExtra(Intent.EXTRA_MIME_TYPES, types);
+        }
+        i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        return i;
+    }
+
+    private void pickDocuments() {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType("*/*");
+        i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        startActivityForResult(i, PICK_FILES);
+    }
+
+    /** The page's attach sheet: gallery and music open their own apps, not the file manager. */
+    private void pick(String kind) {
+        Intent i;
+        if ("gallery".equals(kind) && Build.VERSION.SDK_INT >= 33) {
+            i = new Intent(MediaStore.ACTION_PICK_IMAGES);
+            i.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, MediaStore.getPickImagesMaxLimit());
+        } else if ("gallery".equals(kind)) {
+            i = Intent.createChooser(content("*/*", "image/*", "video/*"), null);
+        } else if ("music".equals(kind)) {
+            i = Intent.createChooser(content("audio/*"), null);
+        } else if ("apps".equals(kind)) {
+            i = Intent.createChooser(content("*/*"), null);
+        } else {
+            pickDocuments();
+            return;
+        }
+        try {
+            startActivityForResult(i, PICK_FILES);
+        } catch (ActivityNotFoundException e) {
+            pickDocuments();
         }
     }
 
@@ -450,12 +533,18 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void pickFiles() {
-            Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            i.addCategory(Intent.CATEGORY_OPENABLE);
-            i.setType("*/*");
-            i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-            startActivityForResult(i, PICK_FILES);
+            ui.post(MainActivity.this::pickDocuments);
+        }
+
+        @JavascriptInterface
+        public void pick(final String kind) {
+            ui.post(() -> MainActivity.this.pick(kind));
+        }
+
+        @JavascriptInterface
+        public void copy(String text) {
+            ClipboardManager c = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            c.setPrimaryClip(ClipData.newPlainText("HotShot", text));
         }
 
         @JavascriptInterface
@@ -494,6 +583,21 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void download(String fid, String chat, String name, String mime, String size) {
             transfers.download(fid, chat, name, mime, Long.parseLong(size));
+        }
+
+        @JavascriptInterface
+        public void push(String fid, String name, String mime, String size) {
+            transfers.push(fid, name, mime, Long.parseLong(size));
+        }
+
+        @JavascriptInterface
+        public void saveChat(String chat) {
+            transfers.saveChat(chat);
+        }
+
+        @JavascriptInterface
+        public void dropChat(String chat) {
+            transfers.dropChat(chat);
         }
 
         @JavascriptInterface

@@ -3,7 +3,7 @@ const Native=window.Native||null,phone=!!Native;
 // on the phone the page's origin follows the laptop's IP, so settings live in the app, not in localStorage
 const store={get(k,d){try{const v=phone?Native.getValue(k):localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch{return d}},set(k,v){try{const s=JSON.stringify(v);if(phone)Native.setValue(k,s);else localStorage.setItem(k,s)}catch{}}};
 const LANG=store.get('lang','fa'),LOC=LANG==='fa'?'fa-IR':'en-US';
-document.documentElement.lang=LANG;document.documentElement.dir=LANG==='fa'?'rtl':'ltr';
+document.documentElement.lang=LANG;document.documentElement.dir=LANG==='fa'?'rtl':'ltr';document.documentElement.classList.add(phone?'phone':'pc');
 const EN={
  "بایت": "Bytes",
  "کیلوبایت": "KB",
@@ -88,8 +88,30 @@ const EN={
  " متصل است": " is online",
  "گوشی متصل نیست": "Phone not connected",
  "، ": ", ",
- "برای دریافت فایل‌ها، پوشه‌ی این گفتگو را روی گوشی انتخاب کنید": "Choose this chat's folder on the phone to receive files",
- "این گفتگو در گوشی ساخته شده. پوشه‌ی ذخیره‌ی فایل‌ها را روی کامپیوتر انتخاب کنید": "This chat was created on the phone. Choose where to save its files on the computer",
+ "اول پوشه‌ی این گفتگو را انتخاب کنید": "First choose a folder for this chat",
+ "فایل‌ها و تاریخچه‌ی این گفتگو در این پوشه روی کامپیوتر ذخیره می‌شوند. تا پوشه را انتخاب نکنید، گفتگو باز نمی‌شود.": "This chat's files and history are saved in this folder on the computer. The chat stays closed until you choose one.",
+ "فایل‌ها و تاریخچه‌ی این گفتگو در این پوشه روی گوشی ذخیره می‌شوند. تا پوشه را انتخاب نکنید، گفتگو باز نمی‌شود.": "This chat's files and history are saved in this folder on the phone. The chat stays closed until you choose one.",
+ "نیاز به انتخاب پوشه": "Needs a folder",
+ "دریافت خودکار فایل‌ها روی کامپیوتر": "Receive files on the computer automatically",
+ "وقتی خاموش باشد، فایل روی دستگاه فرستنده می‌ماند تا خودتان دانلودش کنید.": "When off, a file stays on the sending device until you download it.",
+ "گوشی متصل نیست؛ فایل هنوز روی گوشی است": "Phone not connected; the file is still on the phone",
+ "گوشی نتوانست فایل را بفرستد": "The phone could not send the file",
+ "کپی عکس": "Copy image",
+ "کپی نام فایل": "Copy file name",
+ "دانلود": "Download",
+ "باز کردن": "Open",
+ "این عکس این‌جا نمایش داده نمی‌شود؛ آن را با برنامه‌ی دیگری باز کنید": "This image can't be shown here; open it with another app",
+ "گالری": "Gallery",
+ "موسیقی": "Music",
+ "فایل‌ها": "Files",
+ "برنامه‌های دیگر": "Other apps",
+ "ارسال از": "Send from",
+ "کوچک‌نمایی": "Zoom out",
+ "بزرگ‌نمایی": "Zoom in",
+ "اندازه‌ی صفحه": "Fit to screen",
+ "چرخاندن": "Rotate",
+ "قبلی": "Previous",
+ "بعدی": "Next",
  "پیام‌ها بارگذاری نشد": "Could not load messages",
  "{0} وصل شد": "{0} connected",
  "گفتگوی مقصد را انتخاب کنید": "Choose a chat to send to",
@@ -124,6 +146,8 @@ const X14='<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 const PIN='<svg viewBox="0 0 24 24"><path d="M9 4h6l-1 6 4 4H6l4-4zM12 14v6"/></svg>';
 const TICK1='<svg class="tick" viewBox="0 0 24 24"><path d="M5 13l4 4 10-11"/></svg>';
 const TICK2='<svg class="tick" viewBox="0 0 24 24"><path d="M2 13l4 4 9-10M10 16l1 1 10-11"/></svg>';
+const ICON={copy:'<rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15H4a1 1 0 0 1-1-1V5a2 2 0 0 1 2-2h9a1 1 0 0 1 1 1v1"/>',image:'<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M4 18l5-5 4 4 3-3 4 4"/>',down:'<path d="M12 4v11M7 11l5 5 5-5M5 20h14"/>',open:'<path d="M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',folder:'<path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/>',trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/>',info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.01"/>',pin:'<path d="M9 4h6l-1 6 4 4H6l4-4zM12 14v6"/>',broom:'<path d="M14 4l6 6M4 20l7-7M9 11l4 4-3 5H4v-6z"/>',music:'<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',file:'<path d="M6 3h8l5 5v13H6zM14 3v5h5"/>',apps:'<rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/>'};
+const icon=k=>`<svg viewBox="0 0 24 24">${ICON[k]}</svg>`;
 const COLORS=[['#ff885e','#ff516a'],['#ffcd6a','#ffa85c'],['#82b1ff','#665fff'],['#a0de7e','#54cb68'],['#53edd6','#28c9b7'],['#72d5fd','#2a9ef1'],['#e0a2f3','#d669ed']];
 
 const app=$('#app'),msgs=$('#msgs'),ta=$('#ta'),tray=$('#tray'),chatlist=$('#chatlist'),pm=$('#pm'),dlg=$('#dlg'),lb=$('#lb'),lbbody=$('#lbbody');
@@ -146,7 +170,15 @@ async function api(method,url,body){
   return r.json();
 }
 let toastT;function toast(t){const e=$('#toast');e.textContent=t;e.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>e.hidden=true,3200)}
-function copyText(t){const x=el('textarea');x.value=t;x.style.cssText='position:fixed;opacity:0';document.body.append(x);x.select();try{document.execCommand('copy');toast(tr('کپی شد'))}catch{toast(tr('کپی نشد'))}x.remove()}
+function copyText(t){
+  if(phone&&Native.copy){Native.copy(t);return toast(tr('کپی شد'))}
+  const x=el('textarea');x.value=t;x.style.cssText='position:fixed;opacity:0';document.body.append(x);x.select();try{document.execCommand('copy');toast(tr('کپی شد'))}catch{toast(tr('کپی نشد'))}x.remove();
+}
+async function copyImage(f){
+  try{const b=await createImageBitmap(await(await fetch('/api/files/'+f.id)).blob()),c=el('canvas');c.width=b.width;c.height=b.height;c.getContext('2d').drawImage(b,0,0);
+    const png=await new Promise(r=>c.toBlob(r,'image/png'));await navigator.clipboard.write([new ClipboardItem({'image/png':png})]);toast(tr('کپی شد'))}
+  catch{toast(tr('کپی نشد'))}
+}
 const avatar=(e,c)=>{let h=0;for(const ch of c.id)h=(h*31+ch.charCodeAt(0))>>>0;const[a,b]=COLORS[h%COLORS.length];e.style.background=`linear-gradient(160deg,${a},${b})`;e.textContent=[...c.name][0]||tr('؟')};
 const extOf=n=>(n.includes('.')?n.split('.').pop():'FILE').slice(0,4).toUpperCase();
 
@@ -155,7 +187,7 @@ function meter(){let t0=performance.now(),b0=0,txt='';return bytes=>{const t=per
 
 // ── dialogs
 function closeDlg(){dlg.hidden=true;dlg.textContent=''}
-function openDlg(title){dlg.textContent='';const c=el('div','card-d');c.setAttribute('role','dialog');c.setAttribute('aria-modal','true');c.setAttribute('aria-label',title);c.append(el('h3','',title));dlg.append(c);dlg.hidden=false;return c}
+function openDlg(title){dlg.textContent='';dlg.className='';const c=el('div','card-d');c.setAttribute('role','dialog');c.setAttribute('aria-modal','true');c.setAttribute('aria-label',title);c.append(el('h3','',title));dlg.append(c);dlg.hidden=false;return c}
 dlg.addEventListener('mousedown',e=>{if(e.target===dlg)closeDlg()});
 function button(text,cls,fn){const b=el('button','btn '+(cls||''),text);b.type='button';b.onclick=fn;return b}
 function confirmBox(title,text,okText,checkText){return new Promise(res=>{
@@ -202,11 +234,13 @@ function infoDialog(id){
   const ch=chats.get(id);if(!ch)return;
   const c=openDlg(tr('اطلاعات گفتگو')),name=textInput(ch.name);c.append(field(tr('نام گفتگو'),name));
   let folderGet=()=>'';
-  if(phone){const f=folderField(id,Native.folderLabel(id),()=>{renderNotice()});c.append(field(tr('پوشه‌ی فایل‌ها روی این گوشی'),f.row));c.append(el('p','',tr('فایل‌ها روی کامپیوتر هم در این مسیر ذخیره می‌شوند:')));const pl=el('p','pathline',ch.folder);c.append(pl)}
-  else{const f=folderField(id,ch.folder,()=>{});folderGet=f.get;c.append(field(tr('پوشه‌ی فایل‌ها روی این کامپیوتر'),f.row));c.append(el('p','',tr('فایل‌های قبلی همان‌جا می‌مانند و فقط فایل‌های تازه به پوشه‌ی جدید می‌روند.')))}
-  const l=el('label','chk'),auto=el('input');auto.type='checkbox';auto.checked=ch.auto;l.append(auto,el('span','',tr('دریافت خودکار فایل‌ها روی گوشی')));c.append(l);
+  if(phone){const f=folderField(id,Native.folderLabel(id),()=>{});c.append(field(tr('پوشه‌ی فایل‌ها روی این گوشی'),f.row));if(ch.folderSet){c.append(el('p','',tr('فایل‌ها روی کامپیوتر هم در این مسیر ذخیره می‌شوند:')));c.append(el('p','pathline',ch.folder))}}
+  else{const f=folderField(id,ch.folderSet?ch.folder:'',()=>{});folderGet=f.get;c.append(field(tr('پوشه‌ی فایل‌ها روی این کامپیوتر'),f.row));c.append(el('p','',tr('فایل‌های قبلی همان‌جا می‌مانند و فقط فایل‌های تازه به پوشه‌ی جدید می‌روند.')))}
+  const toggle=(on,text)=>{const l=el('label','chk'),b=el('input');b.type='checkbox';b.checked=on;l.append(b,el('span','',text));c.append(l);return b};
+  const auto=toggle(ch.auto,tr('دریافت خودکار فایل‌ها روی گوشی')),autoPc=toggle(ch.autoPc,tr('دریافت خودکار فایل‌ها روی کامپیوتر'));
+  c.append(el('p','hint',tr('وقتی خاموش باشد، فایل روی دستگاه فرستنده می‌ماند تا خودتان دانلودش کنید.')));
   const a=el('div','acts');a.append(button(tr('انصراف'),'',closeDlg),button(tr('ذخیره'),'solid',async()=>{
-    const b={name:name.value,auto:auto.checked};const nf=folderGet();if(nf&&nf!==ch.folder)b.folder=nf;
+    const b={name:name.value,auto:auto.checked,autoPc:autoPc.checked};const nf=folderGet();if(nf&&nf!==ch.folder)b.folder=nf;
     try{await api('PATCH','/api/chats/'+id,b);closeDlg()}catch(e){toast(e.status===400?tr('این پوشه قابل استفاده نیست'):tr('ذخیره نشد'))}
   }));c.append(a);
 }
@@ -234,11 +268,12 @@ async function pairDialog(){
 
 // ── popup menu
 function pop(x,y,items){
-  pm.textContent='';for(const[t,fn,bad]of items){const b=el('button',bad?'danger':'',t);b.onclick=()=>{pm.hidden=true;fn()};pm.append(b)}
+  pm.textContent='';for(const[t,fn,bad,ic]of items){const b=el('button',bad?'danger':'');if(ic)b.innerHTML=icon(ic);b.append(el('span','',t));b.onclick=()=>{pm.hidden=true;fn()};pm.append(b)}
   pm.hidden=false;pm.style.top=Math.max(8,Math.min(innerHeight-pm.offsetHeight-8,y))+'px';pm.style.left=Math.max(8,Math.min(innerWidth-pm.offsetWidth-8,x))+'px';
 }
 const popAt=(a,items)=>{const r=a.getBoundingClientRect();pop(r.left,r.bottom+4,items)};
-document.addEventListener('mousedown',e=>{if(!pm.hidden&&!e.target.closest('#pm'))pm.hidden=true},true);
+let pmClosed=0;     // the click that closes a menu must not open another one
+document.addEventListener('mousedown',e=>{if(!pm.hidden&&!e.target.closest('#pm')){pm.hidden=true;pmClosed=Date.now()}},true);
 function longPress(root,fn){
   let t,sx,sy;
   root.addEventListener('touchstart',e=>{const p=e.touches[0];sx=p.clientX;sy=p.clientY;const tg=e.target;t=setTimeout(()=>{t=0;fn(tg,sx,sy)},450)},{passive:true});
@@ -311,8 +346,8 @@ async function send(){
 }
 
 // ── file bubbles
-const localOf=f=>!phone||Native.has(f.id);
-function fileState(f){if(busy.has(f.id))return'busy';if(f.gone&&!(phone&&Native.has(f.id)))return'gone';return localOf(f)?'done':'idle'}
+const localOf=f=>phone?Native.has(f.id):!f.held;
+function fileState(f){if(busy.has(f.id))return'busy';if(localOf(f))return f.gone&&!phone?'gone':'done';return f.gone||(phone&&f.held)?'gone':'idle'}
 function syncFile(e){
   const f=FILES.get(e.dataset.fid),s=fileState(f),p=busy.get(f.id)||0;e.dataset.s=s;
   const pg=e.querySelector('.pg');if(pg)pg.style.strokeDashoffset=138.2*(1-(s==='busy'?p:0));
@@ -321,53 +356,133 @@ function syncFile(e){
 }
 const refresh=fid=>document.querySelectorAll(`[data-fid="${fid}"]`).forEach(syncFile);
 function fileEl(f){
-  FILES.set(f.id,f);
+  FILES.set(f.id,f);if(f.fetching&&!phone&&!busy.has(f.id))busy.set(f.id,0);
   const media=(f.kind==='image'||f.kind==='video')&&f.thumb,e=el('div','file '+(media?'media':'card'));e.dataset.fid=f.id;
   const dl=el('div','dl');dl.innerHTML=RING;
-  if(media){e.dataset.k=f.kind;e.style.aspectRatio=f.w&&f.h?`${f.w}/${f.h}`:'4/3';
+  if(media){e.dataset.k=f.kind;e.style.aspectRatio=f.w&&f.h?`${f.w}/${f.h}`:'4/3';if(f.w&&f.h)e.style.width=Math.max(150,Math.round(f.w*Math.min(340/f.w,420/f.h)))+'px';
     const im=new Image();im.src=`/api/files/${f.id}/thumb`;im.alt=f.name;im.decoding='async';im.loading='lazy';e.append(im,el('span','sz',fmt(f.size)),dl)}
   else{const ic=el('div','ic',extOf(f.name));ic.append(dl);const i=el('div','info'),n=el('span','nm',f.name);n.dir='auto';i.append(n,el('span','st',fmt(f.size)));e.append(ic,i)}
   syncFile(e);return e;
 }
+function fetchHeld(f){
+  busy.set(f.id,0);meters.set(f.id,meter());refresh(f.id);
+  api('POST','/api/local/fetch/'+f.id).catch(e=>{transferEnded(f.id);toast(e.status===409?tr('گوشی متصل نیست؛ فایل هنوز روی گوشی است'):tr('دانلود ناموفق بود'))});
+}
+function transferEnded(id){busy.delete(id);speeds.delete(id);meters.delete(id);const f=FILES.get(id);if(f)f.fetching=false;refresh(id)}
 function startDownload(f,chat){
-  if(!phone||busy.has(f.id)||Native.has(f.id))return;
-  if(!Native.folderLabel(chat)){renderNotice();Native.pickFolder(chat);return}
+  if(busy.has(f.id))return;
+  if(!phone){if(f.held)fetchHeld(f);return}
+  if(Native.has(f.id))return;
+  if(!Native.folderLabel(chat)){Native.pickFolder(chat);return}
   busy.set(f.id,0);meters.set(f.id,meter());refresh(f.id);Native.download(f.id,chat,f.name,f.mime,String(f.size));
 }
 const meters=new Map();
 function tapFile(fid){
   const f=FILES.get(fid),s=fileState(f);
   if(s==='gone')return toast(tr('این فایل دیگر روی کامپیوتر نیست'));
-  if(s==='busy')return Native&&Native.cancel(fid);
+  if(s==='busy')return phone?Native.cancel(fid):api('POST',`/api/local/fetch/${fid}/stop`).catch(()=>{});
   if(s==='idle')return startDownload(f,cur);
-  if(f.kind==='image'||f.kind==='video'||f.kind==='audio')return openLB(f);
-  openLocal(f);
+  openFile(f);
 }
+const inViewer=f=>f.kind==='image'||((f.kind==='video'||f.kind==='audio')&&!f.held);
+function openFile(f){if(inViewer(f))openLB(f);else openLocal(f)}
 function openLocal(f){if(phone)Native.open(f.id);else api('POST','/api/local/open/'+f.id).catch(()=>toast(tr('فایل باز نشد')))}
 function showFile(f){if(phone)Native.open(f.id);else api('POST','/api/local/reveal/'+f.id).catch(()=>toast(tr('فایل پیدا نشد')))}
 
-function openLB(f){
-  lbbody.textContent='';let m;
-  if(f.kind==='image'){m=new Image();m.alt=f.name}else{m=el(f.kind==='audio'?'audio':'video');m.controls=true;m.autoplay=true;m.playsInline=true}
-  m.src='/api/files/'+f.id;lbbody.append(m);$('#lbname').textContent=f.name;lb.dataset.fid=f.id;lb.hidden=false;
+// ── viewer: the whole picture fits the screen first; wheel, pinch, drag and double-tap move around it
+const stage=$('#lbstage'),V={list:[],i:0,x:0,y:0,s:1,fit:1,rot:0,nw:1,nh:1,img:null,seq:0},rtl=LANG==='fa';
+const srcOf=f=>phone&&Native.has(f.id)&&f.kind==='image'?'/local/'+f.id:'/api/files/'+f.id;
+const edges=()=>V.rot%180?[V.nh,V.nw]:[V.nw,V.nh];
+const maxZoom=()=>Math.max(V.fit*12,4);
+function layout(){const[w,h]=edges();V.fit=Math.min(stage.clientWidth/w,stage.clientHeight/h,4)}
+function paint(smooth){
+  if(!V.img)return;const[w,h]=edges(),lx=Math.max(0,(w*V.s-stage.clientWidth)/2),ly=Math.max(0,(h*V.s-stage.clientHeight)/2);
+  V.x=Math.max(-lx,Math.min(lx,V.x));V.y=Math.max(-ly,Math.min(ly,V.y));paintRaw(smooth);
 }
-const closeLB=()=>{lb.hidden=true;lbbody.textContent=''};
+function paintRaw(smooth){
+  V.img.classList.toggle('smooth',!!smooth);V.img.style.transform=`translate(-50%,-50%) translate(${V.x}px,${V.y}px) rotate(${V.rot}deg) scale(${V.s})`;
+  $('#lbzoom').textContent=fa(Math.round(V.s*100))+tr('٪');stage.classList.toggle('zoomed',V.s>V.fit*1.01);
+}
+const fitView=smooth=>{layout();V.s=V.fit;V.x=V.y=0;paint(smooth)};
+function zoomTo(s,px,py,smooth){s=Math.max(V.fit,Math.min(maxZoom(),s));V.x=px-(px-V.x)*s/V.s;V.y=py-(py-V.y)*s/V.s;V.s=s;paint(smooth)}
+const fromCenter=e=>{const r=stage.getBoundingClientRect();return[e.clientX-r.left-r.width/2,e.clientY-r.top-r.height/2]};
+function setSize(w,h){const rel=V.s/V.fit;V.nw=w;V.nh=h;V.img.style.width=w+'px';V.img.style.height=h+'px';layout();V.s=V.fit*rel;paint()}
+function lbShow(){
+  const f=V.list[V.i],my=++V.seq;stage.textContent='';V.img=null;V.rot=0;V.x=V.y=0;V.s=V.fit=1;
+  $('#lbname').textContent=f.name;$('#lbcount').textContent=V.list.length>1?fa(V.i+1)+' / '+fa(V.list.length):'';lb.dataset.fid=f.id;
+  $('#lbprev').hidden=V.i<=0;$('#lbnext').hidden=V.i>=V.list.length-1;lb.classList.toggle('pic',f.kind==='image');
+  if(f.kind!=='image'){const m=el(f.kind==='audio'?'audio':'video');m.controls=true;m.autoplay=true;m.playsInline=true;m.src='/api/files/'+f.id;stage.append(m);return}
+  const im=new Image(),spin=el('div','lbspin');im.alt=f.name;im.draggable=false;im.className='lbimg';V.img=im;stage.append(im,spin);
+  if(f.thumb)im.src=`/api/files/${f.id}/thumb`;
+  setSize(f.w||800,f.h||600);fitView();
+  const full=new Image();let triedServer=false;
+  full.onload=()=>{if(my!==V.seq)return;spin.remove();im.src=full.src;setSize(full.naturalWidth,full.naturalHeight)};
+  full.onerror=()=>{if(my!==V.seq)return;
+    if(full.src.includes('/local/')&&!f.held&&!triedServer){triedServer=true;full.src='/api/files/'+f.id;return}
+    spin.remove();toast(tr('این عکس این‌جا نمایش داده نمی‌شود؛ آن را با برنامه‌ی دیگری باز کنید'))};
+  full.src=srcOf(f);
+}
+function openLB(f){
+  V.list=shown.flatMap(m=>m.files).filter(x=>{x=FILES.get(x.id)||x;return inViewer(x)&&fileState(x)==='done'}).map(x=>FILES.get(x.id)||x);
+  V.i=V.list.findIndex(x=>x.id===f.id);if(V.i<0){V.list=[f];V.i=0}
+  lb.hidden=false;lb.classList.remove('bare');lbShow();
+}
+const lbStep=d=>{const i=V.i+d;if(i>=0&&i<V.list.length){V.i=i;lbShow()}};
+const closeLB=()=>{lb.hidden=true;V.seq++;V.img=null;stage.textContent=''};
 $('#lbclose').onclick=closeLB;$('#lbsave').onclick=()=>showFile(FILES.get(lb.dataset.fid));
-lbbody.onclick=e=>{if(e.target===lbbody)closeLB()};
-addEventListener('keydown',e=>{if(e.key==='Escape'){if(!lb.hidden)closeLB();else if(!dlg.hidden)closeDlg();pm.hidden=true}});
+$('#lbprev').onclick=()=>lbStep(-1);$('#lbnext').onclick=()=>lbStep(1);
+$('#lbin').onclick=()=>zoomTo(V.s*1.5,0,0,true);$('#lbout').onclick=()=>zoomTo(V.s/1.5,0,0,true);$('#lbfit').onclick=()=>fitView(true);
+$('#lbrot').onclick=()=>{V.rot+=90;fitView(true)};
+const P=new Map();let G=null,lastTap=0,tapT;
+stage.addEventListener('pointerdown',e=>{
+  if(!V.img)return;e.preventDefault();stage.setPointerCapture(e.pointerId);P.set(e.pointerId,[e.clientX,e.clientY]);
+  if(P.size===1)G={sx:e.clientX,sy:e.clientY,ox:V.x,oy:V.y,moved:false,onImg:e.target===V.img,pinch:false};
+  else if(P.size===2){const[a,b]=[...P.values()];G={pinch:true,d:Math.hypot(a[0]-b[0],a[1]-b[1]),s:V.s,ox:V.x,oy:V.y,moved:true,c:mid(a,b)}}
+});
+const mid=(a,b)=>fromCenter({clientX:(a[0]+b[0])/2,clientY:(a[1]+b[1])/2});
+stage.addEventListener('pointermove',e=>{
+  if(!G||!P.has(e.pointerId))return;P.set(e.pointerId,[e.clientX,e.clientY]);
+  if(G.pinch){if(P.size<2)return;const[a,b]=[...P.values()],k=Math.max(V.fit,Math.min(maxZoom(),G.s*Math.hypot(a[0]-b[0],a[1]-b[1])/G.d))/G.s,c=mid(a,b);V.s=G.s*k;V.x=c[0]-(G.c[0]-G.ox)*k;V.y=c[1]-(G.c[1]-G.oy)*k;paint();return}
+  const dx=e.clientX-G.sx,dy=e.clientY-G.sy;if(Math.hypot(dx,dy)>6)G.moved=true;if(!G.moved)return;
+  V.x=G.ox+dx;V.y=G.oy+dy;if(V.s>V.fit*1.01)paint();else paintRaw();     // at fit size a drag is a swipe, so it isn't held in place
+});
+function pointerEnd(e){
+  if(!P.delete(e.pointerId)||!G)return;const g=G;
+  if(g.pinch){if(!P.size){G=null;if(V.s<=V.fit*1.01)fitView(true)}return}
+  G=null;const dx=e.clientX-g.sx,dy=e.clientY-g.sy,free=V.s<=V.fit*1.01;
+  if(g.moved){
+    if(free){if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy))return lbStep((dx<0)!==rtl?1:-1);if(Math.abs(dy)>120)return closeLB();fitView(true)}
+    return;
+  }
+  const now=Date.now();clearTimeout(tapT);
+  if(now-lastTap<300){lastTap=0;const[x,y]=fromCenter(e);free?zoomTo(Math.min(maxZoom(),Math.max(V.fit*2.6,1)),x,y,true):fitView(true);return}
+  lastTap=now;tapT=setTimeout(()=>{if(g.onImg)lb.classList.toggle('bare');else closeLB()},300);
+}
+stage.addEventListener('pointerup',pointerEnd);stage.addEventListener('pointercancel',pointerEnd);
+stage.addEventListener('click',e=>{if(!V.img&&e.target===stage)closeLB()});
+stage.addEventListener('wheel',e=>{if(!V.img)return;e.preventDefault();const[x,y]=fromCenter(e);zoomTo(V.s*Math.exp(-e.deltaY*.0022),x,y)},{passive:false});
+addEventListener('resize',()=>{if(!lb.hidden&&V.img){const rel=V.s/V.fit;layout();V.s=V.fit*rel;paint()}});
+addEventListener('keydown',e=>{
+  if(e.key==='Escape'){if(!lb.hidden)closeLB();else if(!dlg.hidden)closeDlg();pm.hidden=true;return}
+  if(lb.hidden)return;
+  if(e.key==='ArrowLeft')lbStep(rtl?1:-1);else if(e.key==='ArrowRight')lbStep(rtl?-1:1);
+  else if(!V.img)return;else if(e.key==='+'||e.key==='=')zoomTo(V.s*1.5,0,0,true);else if(e.key==='-')zoomTo(V.s/1.5,0,0,true);else if(e.key==='0')fitView(true);else if(e.key==='r'||e.key==='R')$('#lbrot').click();
+});
 
 // ── messages
 function linkify(n,t){t.split(/(https?:\/\/[^\s<>"']+)/g).forEach((s,i)=>{if(i%2){const a=el('a','',s);a.href=s;a.target='_blank';a.rel='noopener noreferrer';n.append(a)}else if(s)n.append(s)})}
 const dayKey=ts=>new Date(ts*1000).toDateString();
 const sepEl=ts=>el('div','sep',new Date(ts*1000).toLocaleDateString(LOC,{weekday:'long',day:'numeric',month:'long'}));
+const onlyEmoji=t=>[...t].length<=12&&/\p{Extended_Pictographic}/u.test(t)&&!/[\p{L}\p{N}]/u.test(t);
 function tickHtml(m){return m.files.length&&m.files.every(f=>f.got)?TICK2:TICK1}
 function msgEl(m){
   const mine=m.sender.id===me.id,d=el('div','msg '+(mine?'mine':'theirs')),b=el('div','bub');d.dataset.id=m.id;
+  const mb=el('button','mb');mb.type='button';mb.innerHTML='<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>';mb.setAttribute('aria-label',tr('گزینه‌ها'));
   const media=m.files.filter(f=>(f.kind==='image'||f.kind==='video')&&f.thumb);
   if(m.files.length){const fw=el('div','files'+(media.length>1&&media.length===m.files.length?' album':''));m.files.forEach(f=>fw.append(fileEl(f)));b.append(fw)}
-  if(m.text){const t=el('div','txt');t.dir='auto';linkify(t,m.text);b.append(t)}
+  if(m.text){const t=el('div','txt'+(onlyEmoji(m.text)?' big':''));t.dir='auto';linkify(t,m.text);b.append(t)}
   else if(media.length&&media.length===m.files.length)b.classList.add('only-media');
-  const ft=el('div','foot');if(mine){const k=el('span');k.innerHTML=tickHtml(m);k.className='tk';ft.append(k)}ft.append(el('span','',hm(m.ts)));b.append(ft);d.append(b);return d;
+  const ft=el('div','foot');if(mine){const k=el('span');k.innerHTML=tickHtml(m);k.className='tk';ft.append(k)}ft.append(el('span','',hm(m.ts)));b.append(ft);d.append(b,mb);return d;
 }
 function renderAll(){
   msgs.textContent='';let last='';
@@ -377,7 +492,7 @@ function renderAll(){
 function place(n){const p=(pend.get(cur)||new Set()).values().next().value;p&&p.parentNode===msgs?msgs.insertBefore(n,p):msgs.append(n)}
 function appendMsg(m){
   const l=shown[shown.length-1];if(!l||dayKey(l.ts)!==dayKey(m.ts))place(sepEl(m.ts));
-  shown.push(m);ids.add(m.id);place(msgEl(m));
+  shown.push(m);ids.add(m.id);const e=msgEl(m);e.classList.add('new');place(e);
 }
 const nearBottom=()=>msgs.scrollHeight-msgs.scrollTop-msgs.clientHeight<180,toBottom=()=>{msgs.scrollTop=msgs.scrollHeight;$('#down').hidden=true};
 function removeMsg(id){if(!ids.has(id))return;const t=msgs.scrollTop;shown=shown.filter(m=>m.id!==id);ids.delete(id);renderAll();msgs.scrollTop=t}
@@ -421,6 +536,7 @@ function chatRow(c,preview,time,badge){
   li.append(av,mid,rt);return li;
 }
 function previewOf(c){
+  if(!folderReady(c))return tr('نیاز به انتخاب پوشه');
   if(!c.last)return tr('گفتگوی خالی');
   if(c.last.files)return'📎 '+c.last.fname+(c.last.files>1?` (+${fa(c.last.files-1)})`:'');
   return c.last.text;
@@ -436,9 +552,9 @@ function renderList(){
 chatlist.onclick=e=>{const li=e.target.closest('.ci');if(li){$('#q').value='';query='';hits=null;location.hash=li.dataset.id;renderList()}};
 let searchT;$('#q').oninput=e=>{query=e.target.value.trim();hits=null;renderList();clearTimeout(searchT);if(query)searchT=setTimeout(async()=>{try{const r=await api('GET','/api/search?q='+encodeURIComponent(query));hits=r.results;renderList()}catch{}},220)};
 function chatMenuItems(id){
-  const c=chats.get(id),items=[[tr('اطلاعات و پوشه'),()=>infoDialog(id)],[c.pinned?tr('برداشتن سنجاق'):tr('سنجاق کردن'),()=>api('PATCH','/api/chats/'+id,{pinned:!c.pinned}).catch(()=>{})]];
-  if(!phone)items.push([tr('باز کردن پوشه'),()=>api('POST','/api/local/open-folder/'+id).catch(()=>toast(tr('پوشه باز نشد')))]);
-  items.push([tr('پاک کردن تاریخچه'),()=>clearChat(id),1],[tr('حذف گفتگو'),()=>deleteChat(id),1]);return items;
+  const c=chats.get(id),items=[[tr('اطلاعات و پوشه'),()=>infoDialog(id),0,'info'],[c.pinned?tr('برداشتن سنجاق'):tr('سنجاق کردن'),()=>api('PATCH','/api/chats/'+id,{pinned:!c.pinned}).catch(()=>{}),0,'pin']];
+  if(!phone&&c.folderSet)items.push([tr('باز کردن پوشه'),()=>api('POST','/api/local/open-folder/'+id).catch(()=>toast(tr('پوشه باز نشد'))),0,'folder']);
+  items.push([tr('پاک کردن تاریخچه'),()=>clearChat(id),1,'broom'],[tr('حذف گفتگو'),()=>deleteChat(id),1,'trash']);return items;
 }
 longPress(chatlist,(t,x,y)=>{const li=t.closest('.ci');if(li)pop(x,y,chatMenuItems(li.dataset.id))});
 $('#rmenu').onclick=e=>cur&&popAt(e.currentTarget,chatMenuItems(cur));
@@ -450,13 +566,25 @@ $('#menu').onclick=e=>{
   const items=phone?[[tr('قطع جفت‌شدن با کامپیوتر'),async()=>{if(await confirmBox(tr('قطع اتصال'),tr('برای اتصال دوباره باید کد تازه وارد کنید.'),tr('قطع اتصال')))Native.unpair()},1]]:[[tr('اتصال گوشی'),pairDialog]];
   popAt(e.currentTarget,[...items,lang('fa','فارسی'),lang('en','English'),[dot('auto',tr('تم: خودکار')),setT('auto')],[dot('light',tr('تم: روشن')),setT('light')],[dot('dark',tr('تم: تیره')),setT('dark')]]);
 };
-msgs.addEventListener('click',e=>{const f=e.target.closest('.file');if(f)tapFile(f.dataset.fid)});
-longPress(msgs,(t,x,y)=>{
-  const d=t.closest('.msg');if(!d||!d.dataset.id)return;const id=d.dataset.id,m=shown.find(v=>v.id===id);if(!m)return;
-  const items=[];if(m.text)items.push([tr('کپی متن'),()=>copyText(m.text)]);
-  if(m.files.length===1&&localOf(m.files[0]))items.push([phone?tr('باز کردن با برنامه‌ی دیگر'):tr('نمایش در پوشه'),()=>showFile(m.files[0])]);
-  items.push([tr('حذف پیام'),()=>deleteMsg(m),1]);pop(x,y,items);
+function msgMenu(id,x,y){
+  const m=shown.find(v=>v.id===id);if(!m)return;
+  const items=[],f=m.files.length===1?(FILES.get(m.files[0].id)||m.files[0]):null,s=f&&fileState(f);
+  if(m.text)items.push([tr('کپی متن'),()=>copyText(m.text),0,'copy']);
+  if(!phone&&s==='done'&&f.kind==='image')items.push([tr('کپی عکس'),()=>copyImage(f),0,'image']);
+  if(m.files.length)items.push([tr('کپی نام فایل'),()=>copyText(m.files.map(v=>v.name).join('\n')),0,'copy']);
+  if(s==='idle')items.push([tr('دانلود'),()=>startDownload(f,cur),0,'down']);
+  if(s==='done'){items.push([tr('باز کردن'),()=>openFile(f),0,'open']);items.push([phone?tr('باز کردن با برنامه‌ی دیگر'):tr('نمایش در پوشه'),()=>showFile(f),0,phone?'open':'folder'])}
+  items.push([tr('حذف پیام'),()=>deleteMsg(m),1,'trash']);pop(x,y,items);
+}
+msgs.addEventListener('click',e=>{
+  if(Date.now()-pmClosed<400)return;
+  const f=e.target.closest('.file');if(f)return tapFile(f.dataset.fid);
+  const d=e.target.closest('.msg');if(!d||!d.dataset.id||e.target.closest('a'))return;
+  const b=e.target.closest('.mb');
+  if(b){const r=b.getBoundingClientRect();return msgMenu(d.dataset.id,r.left,r.bottom+4)}
+  if(!String(getSelection())&&(phone||!e.target.closest('.bub')))msgMenu(d.dataset.id,e.clientX,e.clientY);
 });
+longPress(msgs,(t,x,y)=>{const d=t.closest('.msg');if(d&&d.dataset.id)msgMenu(d.dataset.id,x,y)});
 async function deleteMsg(m){
   const r=await confirmBox(tr('حذف پیام'),tr('این پیام از هر دو دستگاه حذف می‌شود.'),tr('حذف'),m.files.length?tr('فایل هم از هر دو دستگاه پاک شود'):null);
   if(r)try{await api('DELETE',`/api/chats/${cur}/messages/${m.id}?files=${r.files?1:0}`)}catch{toast(tr('حذف نشد'))}
@@ -474,21 +602,30 @@ function renderLink(){
   l.append(el('span','',phone?(linkUp?tr('متصل به ')+host:tr('در حال اتصال…')):(on?online.join(tr('، '))+tr(' متصل است'):tr('گوشی متصل نیست'))));
   if(!phone&&!on){const b=el('button','',tr('اتصال گوشی'));b.onclick=pairDialog;l.append(b)}
 }
-function renderNotice(){
-  const n=$('#notice'),c=chats.get(cur);n.hidden=true;if(!c)return;
-  if(phone&&!Native.folderLabel(c.id)){n.textContent=tr('برای دریافت فایل‌ها، پوشه‌ی این گفتگو را روی گوشی انتخاب کنید');n.onclick=()=>Native.pickFolder(c.id);n.hidden=false}
-  else if(!phone&&!c.folderSet){n.textContent=tr('این گفتگو در گوشی ساخته شده. پوشه‌ی ذخیره‌ی فایل‌ها را روی کامپیوتر انتخاب کنید');n.onclick=()=>infoDialog(c.id);n.hidden=false}
+// a chat stays closed on a device until that device knows where the chat's files and history go
+function folderReady(c){return phone?!!Native.folderLabel(c.id):c.folderSet}
+function renderGate(){
+  const was=app.classList.contains('locked'),c=chats.get(cur),locked=!!c&&!folderReady(c);app.classList.toggle('locked',locked);
+  if(locked)$('#gatep').textContent=phone?tr('فایل‌ها و تاریخچه‌ی این گفتگو در این پوشه روی گوشی ذخیره می‌شوند. تا پوشه را انتخاب نکنید، گفتگو باز نمی‌شود.'):tr('فایل‌ها و تاریخچه‌ی این گفتگو در این پوشه روی کامپیوتر ذخیره می‌شوند. تا پوشه را انتخاب نکنید، گفتگو باز نمی‌شود.');
+  if(was&&!locked&&cur)loadMsgs(cur).catch(()=>{});
+  return locked;
 }
+$('#gatebtn').onclick=async()=>{
+  const id=cur;if(!id)return;if(phone)return Native.pickFolder(id);
+  try{const r=await api('POST','/api/local/pick-folder',{start:'',title:tr('پوشه‌ی فایل‌های این گفتگو')});if(r.path)await api('PATCH','/api/chats/'+id,{folder:r.path})}
+  catch(e){toast(e.status===400?tr('این پوشه قابل استفاده نیست'):tr('پوشه انتخاب نشد'))}
+};
 function leave(){if(cur){keepText();cur=null;draft=[];renderTray()}}
 async function openRoom(id){
-  leave();cur=id;unread[id]=0;saveUnread();renderList();renderHead();renderNotice();app.classList.remove('idle');shown=[];ids=new Set();msgs.textContent='';
+  leave();cur=id;unread[id]=0;saveUnread();renderList();renderHead();app.classList.remove('locked','idle');shown=[];ids=new Set();msgs.textContent='';
   ta.value=store.get('draft:'+id,'');autosize();updateSend();
   if(shared.length){draft=draft.concat(shared);shared=[];renderTray()}
+  if(renderGate())return;
   try{await loadMsgs(id)}catch{toast(tr('پیام‌ها بارگذاری نشد'))}
 }
 function route(){
-  const id=location.hash.slice(1);
-  if(id&&chats.has(id)){app.classList.add('in-room');if(cur!==id)openRoom(id);return}
+  const id=location.hash.slice(1);app.classList.remove('locked');
+  if(id&&chats.has(id)){app.classList.add('in-room');if(cur!==id)openRoom(id);else renderGate();return}
   app.classList.remove('in-room');
   if(matchMedia('(min-width:761px)').matches&&chats.size){location.replace('#'+sorted()[0].id);return}
   leave();app.classList.add('idle');renderList();
@@ -506,22 +643,38 @@ window.goBack=()=>{
 
 // ── live sync: the server pushes changes, nothing refreshes unless something changed
 function setFiles(m,fid,fn){const x=m.files.find(f=>f.id===fid);if(x)fn(x)}
+function updateFile(ev){
+  const m=shown.find(v=>v.id===ev.msg),g=FILES.get(ev.file.id);if(m)setFiles(m,ev.file.id,f=>Object.assign(f,ev.file));if(g)Object.assign(g,ev.file);
+  transferEnded(ev.file.id);const d=m&&msgs.querySelector(`[data-id="${ev.msg}"] .tk`);if(d)d.innerHTML=tickHtml(m);
+}
 function purge(list){if(phone)(list||[]).forEach(id=>Native.removeLocal(id))}
 function handle(ev){
   switch(ev.t){
     case'msg':onMsg(ev.chat,ev.msg,ev.sum);break;
     case'msgdel':if(ev.sum)chats.set(ev.chat,ev.sum);purge(ev.purged);if(ev.chat===cur)removeMsg(ev.id);renderList();break;
     case'cleared':if(ev.sum)chats.set(ev.chat,ev.sum);purge(ev.purged);if(ev.chat===cur){shown=[];ids=new Set();hasMore=false;renderAll()}renderList();break;
-    case'chat':chats.set(ev.chat.id,ev.chat);if(ev.chat.id===cur){renderHead();renderNotice()}renderList();break;
-    case'chatdel':chats.delete(ev.id);delete unread[ev.id];saveUnread();purge(ev.purged);if(phone)Native.clearFolder(ev.id);
+    case'chat':chats.set(ev.chat.id,ev.chat);if(ev.chat.id===cur){renderHead();renderGate()}renderList();break;
+    case'chatdel':chats.delete(ev.id);delete unread[ev.id];saveUnread();purge(ev.purged);if(phone){if(Native.dropChat)Native.dropChat(ev.id);Native.clearFolder(ev.id)}
       if(ev.id===cur){cur=null;draft=[];renderTray();history.replaceState(null,'',location.pathname)}renderList();route();break;
     case'got':{const m=shown.find(v=>v.id===ev.msg);if(m){setFiles(m,ev.id,f=>f.got=true);const d=msgs.querySelector(`[data-id="${ev.msg}"] .tk`);if(d)d.innerHTML=tickHtml(m)}break}
-    case'presence':online=ev.online;renderLink();renderHead();break;
+    case'presence':online=ev.online;renderLink();renderHead();if(!phone&&!online.length)[...busy.keys()].forEach(transferEnded);break;
+    case'fetch':if(phone&&ev.to===me.id)Native.push(ev.id,ev.name,ev.mime,String(ev.size));break;
+    case'fetchstop':if(phone&&ev.to===me.id)Native.cancel(ev.id);break;
+    case'prog':if(!phone){busy.set(ev.id,ev.size?ev.bytes/ev.size:0);const m=meters.get(ev.id);if(m)speeds.set(ev.id,m(ev.bytes));refresh(ev.id)}break;
+    case'fetchend':if(!phone){transferEnded(ev.id);if(ev.failed)toast(tr('گوشی نتوانست فایل را بفرستد'))}break;
+    case'file':updateFile(ev);break;
     case'paired':closeDlg();toast(tr('{0} وصل شد',ev.name));break;
   }
+  if(phone&&/^(msg|msgdel|cleared|chat)$/.test(ev.t))saveSoon();
+}
+// the phone keeps its own copy of each chat's history in that chat's folder
+let saveT;const saveSoon=()=>{clearTimeout(saveT);saveT=setTimeout(saveChats,2500)};
+function saveChats(){
+  if(!phone||!Native.saveChat)return;
+  for(const c of chats.values()){if(!Native.folderLabel(c.id))continue;const k=`${c.name}|${c.updated}|${c.count}`;if(store.get('saved:'+c.id)!==k){store.set('saved:'+c.id,k);Native.saveChat(c.id)}}
 }
 async function loadState(){
-  const s=await api('GET','/api/state');me=s.me;host=s.host;online=s.online;chats=new Map(s.chats.map(c=>[c.id,c]));renderList();renderLink();
+  const s=await api('GET','/api/state');me=s.me;host=s.host;online=s.online;chats=new Map(s.chats.map(c=>[c.id,c]));renderList();renderLink();saveChats();
 }
 function connect(){
   const es=new EventSource('/api/events');let first=true,lost=0;
@@ -537,7 +690,7 @@ window.onNative=ev=>{
     case'picked':for(const it of ev.items)draft.push({key:it.key,name:it.name,size:it.size,type:it.mime});renderTray();break;
     case'shared':{const items=ev.items.map(it=>({key:it.key,name:it.name,size:it.size,type:it.mime}));
       if(cur){draft=draft.concat(items);renderTray()}else{shared=shared.concat(items);toast(tr('گفتگوی مقصد را انتخاب کنید'))}break}
-    case'folder':{const w=folderWaiters.get(ev.key);if(w)w(ev.label);if(ev.key===cur){renderNotice();shown.forEach(m=>autoFetch(m,cur))}break}
+    case'folder':{const w=folderWaiters.get(ev.key);if(w)w(ev.label);store.set('saved:'+ev.key,'');saveSoon();renderList();if(ev.key===cur){renderGate();shown.forEach(m=>autoFetch(m,cur))}break}
     case'up':nativeUps.get(ev.key)?.onp(ev.bytes);break;
     case'upok':nativeUps.get(ev.key)?.ok(ev.id);nativeUps.delete(ev.key);break;
     case'upfail':nativeUps.get(ev.key)?.no(new Error('native'));nativeUps.delete(ev.key);break;
@@ -549,7 +702,14 @@ window.onNative=ev=>{
 
 // ── composer
 $('#send').onclick=send;
-$('#attach').onclick=()=>phone?Native.pickFiles():$('#file').click();
+function attachSheet(){
+  if(!Native.pick)return Native.pickFiles();
+  const c=openDlg(tr('ارسال از'));dlg.className='sheet';const g=el('div','tiles');
+  for(const[k,t,ic]of[['gallery',tr('گالری'),'image'],['music',tr('موسیقی'),'music'],['files',tr('فایل‌ها'),'file'],['apps',tr('برنامه‌های دیگر'),'apps']]){
+    const b=el('button','tile t-'+k);b.type='button';const i=el('span');i.innerHTML=icon(ic);b.append(i,el('small','',t));b.onclick=()=>{closeDlg();Native.pick(k)};g.append(b)}
+  c.append(g);
+}
+$('#attach').onclick=()=>phone?attachSheet():$('#file').click();
 $('#file').onchange=e=>{addFiles([...e.target.files]);e.target.value=''};
 ta.addEventListener('input',()=>{autosize();updateSend();keepText()});
 ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing&&!phone){e.preventDefault();send()}});
@@ -574,5 +734,6 @@ if(LANG==='en'){
 }
 msgs.dataset.empty=tr('هنوز پیامی نیست. پیام بنویسید یا فایل بفرستید.');$('#room').dataset.drop=tr('فایل را اینجا رها کنید');
 
+new ResizeObserver(()=>{$('#room').style.setProperty('--cb',$('#composer').offsetHeight+'px');if(nearBottom())msgs.scrollTop=msgs.scrollHeight}).observe($('#composer'));
 (async()=>{try{await loadState();route();connect();if(phone)Native.ready()}catch{if(phone)Native.lost();else{toast(tr('اتصال برقرار نشد'));setTimeout(()=>location.reload(),3000)}}})();
 })();

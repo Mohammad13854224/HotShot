@@ -30,7 +30,7 @@
    </button>
    <button class="ib" id="rmenu" aria-label="گزینه‌ها"><svg viewBox="0 0 24 24" class="solid"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg></button>
   </div>
-  <button id="notice" hidden></button>
+  <div id="gate"><div class="gate-card"><svg viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M12 11v5M9.5 13.5h5"/></svg><h3 data-t>اول پوشه‌ی این گفتگو را انتخاب کنید</h3><p id="gatep"></p><button class="btn solid" id="gatebtn" data-t>انتخاب پوشه</button></div></div>
   <div id="msgs"></div>
   <button id="down" class="ib" hidden aria-label="رفتن به آخرین پیام"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
   <div id="composer">
@@ -49,12 +49,21 @@
 <div id="pm" hidden></div>
 <div id="dlg" hidden></div>
 <div id="lb" hidden>
+ <div id="lbstage"></div>
  <div class="lb-bar">
   <button class="ib" id="lbclose" aria-label="بستن"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-  <span id="lbname" dir="auto"></span>
+  <div class="lb-t"><span id="lbname" dir="auto"></span><small id="lbcount"></small></div>
   <button class="ib" id="lbsave" aria-label="نمایش فایل"><svg viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg></button>
  </div>
- <div id="lbbody"></div>
+ <button class="ib lb-nav" id="lbprev" aria-label="قبلی"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+ <button class="ib lb-nav" id="lbnext" aria-label="بعدی"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+ <div class="lb-tools">
+  <button class="ib" id="lbout" aria-label="کوچک‌نمایی" title="کوچک‌نمایی"><svg viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+  <span id="lbzoom"></span>
+  <button class="ib" id="lbin" aria-label="بزرگ‌نمایی" title="بزرگ‌نمایی"><svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg></button>
+  <button class="ib" id="lbfit" aria-label="اندازه‌ی صفحه" title="اندازه‌ی صفحه"><svg viewBox="0 0 24 24"><path d="M4 9V5a1 1 0 0 1 1-1h4M15 4h4a1 1 0 0 1 1 1v4M20 15v4a1 1 0 0 1-1 1h-4M9 20H5a1 1 0 0 1-1-1v-4"/></svg></button>
+  <button class="ib" id="lbrot" aria-label="چرخاندن" title="چرخاندن"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.5-5.8M20 3v5h-5"/></svg></button>
+ </div>
 </div>
 <div id="toast" hidden></div>
 <script src="/static/app.js"></script>

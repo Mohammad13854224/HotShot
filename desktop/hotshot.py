@@ -7,7 +7,7 @@ The computer joins the phone's hotspot and this program hosts the chats:
   0.0.0.0:47800    the phone app (TLS with a pinned certificate and a pairing token)
   UDP 47801        announcements, so the phone finds the computer by itself
 
-Files go uncompressed, straight into each chat's folder.
+Files go uncompressed, straight into each chat's folder, next to a copy of the chat's history (HotShot-chat.json).
 """
 import argparse, hashlib, hmac, json, mimetypes, os, queue, re, secrets, shutil, socket, sqlite3, ssl
 import subprocess, sys, threading, time, uuid, webbrowser
@@ -23,6 +23,7 @@ WEB = os.path.join(getattr(sys, "_MEIPASS", HERE), "web")
 NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 PAIR_ROUNDS = 150000
 CHUNK = 1 << 20
+CHAT_FILE = "HotShot-chat.json"
 
 if sys.stdout is None:          # windowed exe: there is no console to print to
     sys.stdout = sys.stderr = open(os.devnull, "w", encoding="utf-8")
@@ -33,19 +34,22 @@ PENDING = {}                    # file id -> upload in progress
 PAIR = {"code": None, "until": 0.0, "tries": 0}
 LOCAL_SECRET = secrets.token_urlsafe(32)
 DATA = DB = FP = None           # filled in by main()
+DIRTY = set()                   # chats whose history file is out of date
+DIRTY_WAKE = threading.Event()
 
 
 # ───────────────────────── storage ─────────────────────────
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS chats(id TEXT PRIMARY KEY, name TEXT NOT NULL, folder TEXT NOT NULL,
   folder_set INTEGER NOT NULL DEFAULT 1, auto INTEGER NOT NULL DEFAULT 1, pinned INTEGER NOT NULL DEFAULT 0,
-  created REAL NOT NULL, updated REAL NOT NULL, seq INTEGER NOT NULL DEFAULT 0);
+  created REAL NOT NULL, updated REAL NOT NULL, seq INTEGER NOT NULL DEFAULT 0, auto_pc INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY, chat TEXT NOT NULL, n INTEGER NOT NULL, ts REAL NOT NULL,
   sender_id TEXT NOT NULL, sender_name TEXT NOT NULL, text TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS messages_chat ON messages(chat, n);
 CREATE TABLE IF NOT EXISTS files(id TEXT PRIMARY KEY, msg TEXT NOT NULL, chat TEXT NOT NULL, name TEXT NOT NULL,
   size INTEGER NOT NULL, mime TEXT NOT NULL, kind TEXT NOT NULL, w INTEGER NOT NULL, h INTEGER NOT NULL,
-  thumb INTEGER NOT NULL, path TEXT NOT NULL, got INTEGER NOT NULL DEFAULT 0);
+  thumb INTEGER NOT NULL, path TEXT NOT NULL, got INTEGER NOT NULL DEFAULT 0, held INTEGER NOT NULL DEFAULT 0,
+  owner TEXT NOT NULL DEFAULT '');
 CREATE INDEX IF NOT EXISTS files_msg ON files(msg);
 CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY, name TEXT NOT NULL, token TEXT NOT NULL,
   created REAL NOT NULL, seen REAL NOT NULL);
@@ -58,6 +62,13 @@ def open_db(path):
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("PRAGMA synchronous=NORMAL")
     db.executescript(SCHEMA)
+    # a database from an older version: the one "receive automatically" switch used to mean both devices
+    if "auto_pc" not in [r["name"] for r in db.execute("PRAGMA table_info(chats)")]:
+        db.execute("ALTER TABLE chats ADD COLUMN auto_pc INTEGER NOT NULL DEFAULT 1")
+        db.execute("UPDATE chats SET auto_pc=auto")
+    if "held" not in [r["name"] for r in db.execute("PRAGMA table_info(files)")]:
+        db.execute("ALTER TABLE files ADD COLUMN held INTEGER NOT NULL DEFAULT 0")
+        db.execute("ALTER TABLE files ADD COLUMN owner TEXT NOT NULL DEFAULT ''")
     return db
 
 
@@ -101,8 +112,10 @@ def thumb_path(fid):
 
 
 def file_json(r):
+    held = bool(r["held"])      # still only on the phone that sent it, until the laptop asks for it
     return {"id": r["id"], "name": r["name"], "size": r["size"], "mime": r["mime"], "kind": r["kind"], "w": r["w"],
-            "h": r["h"], "thumb": bool(r["thumb"]), "got": bool(r["got"]), "gone": not os.path.exists(r["path"])}
+            "h": r["h"], "thumb": bool(r["thumb"]), "got": bool(r["got"]), "held": held,
+            "fetching": held and r["id"] in PENDING, "gone": not held and not os.path.exists(r["path"])}
 
 
 def messages_json(rows):
@@ -120,7 +133,8 @@ def summary(c):
     last = DB.execute("SELECT * FROM messages WHERE chat=? ORDER BY n DESC LIMIT 1", (c["id"],)).fetchone()
     count = DB.execute("SELECT COUNT(*) FROM messages WHERE chat=?", (c["id"],)).fetchone()[0]
     out = {"id": c["id"], "name": c["name"], "folder": c["folder"], "folderSet": bool(c["folder_set"]),
-           "auto": bool(c["auto"]), "pinned": bool(c["pinned"]), "created": c["created"], "updated": c["updated"],
+           "auto": bool(c["auto"]), "autoPc": bool(c["auto_pc"]), "pinned": bool(c["pinned"]),
+           "created": c["created"], "updated": c["updated"],
            "count": count, "last": None}
     if last:
         fs = DB.execute("SELECT name FROM files WHERE msg=? ORDER BY rowid", (last["id"],)).fetchall()
@@ -155,6 +169,76 @@ def broadcast(ev):
     data = json.dumps(ev, ensure_ascii=False)
     for c in list(CLIENTS):
         c["q"].put(data)
+    if ev["t"] in ("msg", "msgdel", "cleared", "file"):
+        mark_dirty(ev["chat"])
+    elif ev["t"] == "chat":
+        mark_dirty(ev["chat"]["id"])
+
+
+# ── each chat's folder also holds its history, so the folder alone is a complete record of the chat
+def mark_dirty(cid):
+    DIRTY.add(cid)
+    DIRTY_WAKE.set()
+
+
+def chat_export(c):
+    files = {}
+    for f in DB.execute("SELECT * FROM files WHERE chat=? ORDER BY rowid", (c["id"],)):
+        files.setdefault(f["msg"], []).append({k: f[k] for k in ("name", "size", "mime", "kind", "w", "h")})
+    messages = [{"ts": m["ts"], "sender": {"id": m["sender_id"], "name": m["sender_name"]}, "text": m["text"],
+                 "files": files.get(m["id"], [])}
+                for m in DB.execute("SELECT * FROM messages WHERE chat=? ORDER BY n", (c["id"],))]
+    return {"app": APP_SLUG, "version": 1, "name": c["name"], "created": c["created"], "messages": messages}
+
+
+def save_chat_file(cid):
+    with LOCK:
+        c = get_chat(cid)
+        if not c or not c["folder_set"]:
+            return
+        body = json.dumps(chat_export(c), ensure_ascii=False, indent=1)
+    path = os.path.join(c["folder"], CHAT_FILE)
+    try:
+        os.makedirs(c["folder"], exist_ok=True)
+        with open(path + ".tmp", "w", encoding="utf-8") as f:
+            f.write(body)
+        os.replace(path + ".tmp", path)     # a crash halfway never leaves a broken history behind
+    except OSError:
+        pass        # e.g. a removable drive that is not plugged in right now
+
+
+def chat_saver():
+    while True:
+        DIRTY_WAKE.wait()
+        time.sleep(1.5)     # a burst of changes costs one write
+        DIRTY_WAKE.clear()
+        while DIRTY:
+            save_chat_file(DIRTY.pop())
+
+
+def restore_chat(cid, folder):
+    """A folder that already holds a history brings that history back, e.g. after a reinstall."""
+    try:
+        with open(os.path.join(folder, CHAT_FILE), encoding="utf-8") as f:
+            saved = json.load(f)
+        if saved.get("app") != APP_SLUG:
+            return
+        n = 0
+        for m in saved["messages"]:
+            n += 1
+            mid, sender = uuid.uuid4().hex[:12], m["sender"]
+            DB.execute("INSERT INTO messages VALUES(?,?,?,?,?,?,?)", (mid, cid, n, float(m["ts"]), str(sender["id"]),
+                                                                      str(sender["name"]), str(m["text"])))
+            for x in m["files"]:
+                name = clean_name(x["name"])    # the file only ever points inside this folder
+                mime = safe_mime(x.get("mime"), name)
+                DB.execute("INSERT INTO files(id,msg,chat,name,size,mime,kind,w,h,thumb,path,got) "
+                           "VALUES(?,?,?,?,?,?,?,?,?,0,?,1)",
+                           (uuid.uuid4().hex[:16], mid, cid, name, int(x["size"]), mime, kind_of(mime),
+                            int(x.get("w") or 0), int(x.get("h") or 0), os.path.join(folder, name)))
+        DB.execute("UPDATE chats SET seq=? WHERE id=?", (n, cid))
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        pass        # no history here, or not one of ours
 
 
 def presence():
@@ -170,7 +254,8 @@ def janitor():
                 p = PENDING.pop(fid)
                 if not p["done"]:
                     remove_paths([p["part"]])
-                remove_paths([thumb_path(fid)])
+                if not p.get("fetch"):      # a fetch that stalled still has its message and thumbnail
+                    remove_paths([thumb_path(fid)])
 
 
 def clean_leftovers():
@@ -518,12 +603,14 @@ def r_newchat(h):
     cid, now = uuid.uuid4().hex[:10], time.time()
     wanted = str(b.get("folder") or "").strip() if h.who["local"] else ""
     try:
-        folder = valid_folder(wanted or default_folder(name, cid))
+        folder = valid_folder(wanted) if wanted else ""     # a chat from the phone waits for the laptop's choice
     except OSError:
         return h.send_json({"error": "folder"}, 400)
     with LOCK:
         DB.execute("INSERT INTO chats(id,name,folder,folder_set,created,updated) VALUES(?,?,?,?,?,?)",
                    (cid, name, folder, int(bool(wanted)), now, now))
+        if wanted:
+            restore_chat(cid, folder)
         s = summary(get_chat(cid))
     broadcast({"t": "chat", "chat": s})
     h.send_json(s)
@@ -542,6 +629,8 @@ def r_editchat(h, cid):
             DB.execute("UPDATE chats SET pinned=? WHERE id=?", (int(bool(b["pinned"])), cid))
         if "auto" in b:
             DB.execute("UPDATE chats SET auto=? WHERE id=?", (int(bool(b["auto"])), cid))
+        if "autoPc" in b:
+            DB.execute("UPDATE chats SET auto_pc=? WHERE id=?", (int(bool(b["autoPc"])), cid))
         if b.get("folder"):
             if not h.who["local"]:
                 return h.send_json({"error": "forbidden"}, 403)
@@ -549,7 +638,11 @@ def r_editchat(h, cid):
                 folder = valid_folder(b["folder"])
             except OSError:
                 return h.send_json({"error": "folder"}, 400)
+            if c["folder_set"] and folder != c["folder"]:   # the history moves with the chat
+                remove_paths([os.path.join(c["folder"], CHAT_FILE)])
             DB.execute("UPDATE chats SET folder=?, folder_set=1 WHERE id=?", (folder, cid))
+            if not c["seq"]:
+                restore_chat(cid, folder)
         s = summary(get_chat(cid))
     broadcast({"t": "chat", "chat": s})
     h.send_json(s)
@@ -563,6 +656,9 @@ def wants_purge(h):
 def r_delchat(h, cid):
     purge = wants_purge(h)
     with LOCK:
+        c = get_chat(cid)
+        if c and c["folder_set"]:
+            remove_paths([os.path.join(c["folder"], CHAT_FILE)])
         fids = drop_files("chat=?", (cid,), purge)
         DB.execute("DELETE FROM messages WHERE chat=?", (cid,))
         DB.execute("DELETE FROM chats WHERE id=?", (cid,))
@@ -580,6 +676,16 @@ def r_clear(h, cid):
         s = summary(c) if c else None
     broadcast({"t": "cleared", "chat": cid, "sum": s, "purged": fids if purge else []})
     h.send_json({"ok": True})
+
+
+@route("GET", r"/api/chats/(?P<cid>\w+)/export")
+def r_export(h, cid):
+    with LOCK:
+        c = get_chat(cid)
+        if not c:
+            return h.send_json({"error": "no chat"}, 404)
+        out = chat_export(c)
+    h.send_json(out)
 
 
 @route("GET", r"/api/chats/(?P<cid>\w+)/messages")
@@ -610,10 +716,12 @@ def r_post(h, cid):
         DB.execute("INSERT INTO messages VALUES(?,?,?,?,?,?,?)", (mid, cid, n, now, h.who["id"], h.who["name"], text))
         for i in ids:
             p = PENDING.pop(i)
-            # the laptop already holds every file; only a laptop → phone file still has a trip to make
-            DB.execute("INSERT INTO files VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            # a file the phone uploaded has arrived; one from the laptop or still held on the phone has a trip to make
+            DB.execute("INSERT INTO files(id,msg,chat,name,size,mime,kind,w,h,thumb,path,got,held,owner) "
+                       "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                        (i, mid, cid, p["name"], p["size"], p["mime"], kind_of(p["mime"]), p["w"], p["h"],
-                        int(os.path.exists(thumb_path(i))), p["final"], 0 if h.who["local"] else 1))
+                        int(os.path.exists(thumb_path(i))), p["final"], 0 if h.who["local"] or p["hold"] else 1,
+                        int(p["hold"]), h.who["id"]))
         DB.execute("UPDATE chats SET seq=?, updated=? WHERE id=?", (n, now, cid))
         row = DB.execute("SELECT * FROM messages WHERE id=?", (mid,)).fetchone()
         ev = {"t": "msg", "chat": cid, "msg": messages_json([row])[0], "sum": summary(get_chat(cid))}
@@ -654,19 +762,37 @@ def r_fnew(h):
     size = int(b.get("size") or 0)
     with LOCK:
         c = get_chat(str(b.get("chat") or ""))
-    if not c:
-        return h.send_json({"error": "no chat"}, 404)
-    os.makedirs(c["folder"], exist_ok=True)
-    if size < 0 or shutil.disk_usage(c["folder"]).free < size + (64 << 20):
-        return h.send_json({"error": "no space"}, 507)
+        if not c:
+            return h.send_json({"error": "no chat"}, 404)
+        # the phone keeps the file when the laptop should not take it by itself, or has no folder for it yet
+        hold = not h.who["local"] and bool(b.get("canHold")) and not (c["auto_pc"] and c["folder_set"])
+        folder = c["folder"]
+        if not hold and not folder:     # the phone cannot keep this one, so it needs somewhere to land for now
+            folder = default_folder(c["name"], c["id"])
+            DB.execute("UPDATE chats SET folder=? WHERE id=?", (folder, c["id"]))
+    if size < 0:
+        return h.send_json({"error": "size"}, 400)
     fid = uuid.uuid4().hex[:16]
     name = clean_name(b.get("name"))
-    part = os.path.join(c["folder"], f".{fid}.part")
-    open(part, "wb").close()
-    PENDING[fid] = {"chat": c["id"], "folder": c["folder"], "name": name, "size": size, "part": part, "final": "",
+    part = ""
+    if not hold:
+        part = reserve(folder, fid, size)
+        if not part:
+            return h.send_json({"error": "no space"}, 507)
+    PENDING[fid] = {"chat": c["id"], "folder": folder, "name": name, "size": size, "part": part, "final": "",
                     "mime": safe_mime(b.get("mime"), name), "w": int(b.get("w") or 0), "h": int(b.get("h") or 0),
-                    "received": 0, "done": False, "busy": threading.Lock(), "touched": time.time()}
-    h.send_json({"id": fid})
+                    "received": 0, "done": False, "busy": threading.Lock(), "touched": time.time(), "hold": hold}
+    h.send_json({"id": fid, "hold": hold})
+
+
+def reserve(folder, fid, size):
+    """Creates the file a transfer writes into; returns "" when the disk cannot take it."""
+    os.makedirs(folder, exist_ok=True)
+    if shutil.disk_usage(folder).free < size + (64 << 20):
+        return ""
+    part = os.path.join(folder, f".{fid}.part")
+    open(part, "wb").close()
+    return part
 
 
 @route("GET", r"/api/files/(?P<fid>\w+)/status")
@@ -682,7 +808,7 @@ def r_fdata(h, fid):
     p = PENDING.get(fid)
     off = int(h.q.get("offset", ["0"])[0])
     left = int(h.headers.get("Content-Length") or 0)
-    if not p or p["done"] or off + left > p["size"]:
+    if not p or p["done"] or p.get("hold") or off + left > p["size"]:
         return h.send_json({"error": "bad range"}, 400)
     if not p["busy"].acquire(blocking=False):
         return h.send_json({"error": "busy", "received": p["received"]}, 409)
@@ -701,6 +827,9 @@ def r_fdata(h, fid):
                 left -= k
                 p["received"] += k
                 p["touched"] = time.time()
+                if p.get("fetch") and p["touched"] - p["tick"] > .2:    # the laptop's window shows this one's progress
+                    p["tick"] = p["touched"]
+                    broadcast({"t": "prog", "id": fid, "bytes": p["received"], "size": p["size"]})
     finally:
         p["busy"].release()
     h.send_json({"received": p["received"]})
@@ -719,24 +848,48 @@ def r_fthumb(h, fid):
 
 @route("POST", r"/api/files/(?P<fid>\w+)/done")
 def r_fdone(h, fid):
+    ev = None
     with LOCK:
         p = PENDING.get(fid)
-        if not p or p["received"] != p["size"]:
+        if not p or (p["received"] != p["size"] and not p["hold"]):
             return h.send_json({"error": "incomplete"}, 400)
-        if not p["done"]:
+        if not p["done"] and not p["hold"]:
             p["final"] = unique_path(p["folder"], p["name"])
             os.replace(p["part"], p["final"])
             p["name"] = os.path.basename(p["final"])
-            p["done"] = True
+        p["done"] = True
+        if p.get("fetch"):      # a held file has reached the laptop: its message already exists
+            del PENDING[fid]
+            DB.execute("UPDATE files SET path=?, name=?, held=0, got=1 WHERE id=?", (p["final"], p["name"], fid))
+            f = file_row(fid)
+            if f:
+                ev = {"t": "file", "chat": f["chat"], "msg": f["msg"], "file": file_json(f)}
+    if ev:
+        broadcast(ev)
     h.send_json({"ok": True, "name": p["name"]})
 
 
 @route("DELETE", r"/api/files/(?P<fid>\w+)")
 def r_fcancel(h, fid):
+    end_transfer(fid, False)
+    h.send_json({"ok": True})
+
+
+def end_transfer(fid, failed):
     with LOCK:
         p = PENDING.pop(fid, None)
-    if p:
+    if not p:
+        return
+    if p.get("fetch"):      # the message stays and the file stays on the phone, so this can be tried again
+        remove_paths([p["part"]])
+        broadcast({"t": "fetchend", "id": fid, "failed": failed})
+    else:
         remove_paths([p["final"] or p["part"], thumb_path(fid)])
+
+
+@route("POST", r"/api/files/(?P<fid>\w+)/failed")
+def r_ffailed(h, fid):
+    end_transfer(fid, True)
     h.send_json({"ok": True})
 
 
@@ -768,6 +921,38 @@ def r_fgot(h, fid):
             return h.send_json({"error": "gone"}, 404)
         DB.execute("UPDATE files SET got=1 WHERE id=?", (fid,))
     broadcast({"t": "got", "chat": f["chat"], "msg": f["msg"], "id": fid})
+    h.send_json({"ok": True})
+
+
+# ── a held file: the laptop's window asks, the phone that holds it uploads it
+@route("POST", r"/api/local/fetch/(?P<fid>\w+)", local=True)
+def r_fetch(h, fid):
+    with LOCK:
+        f = file_row(fid)
+        if not f or not f["held"]:
+            return h.send_json({"error": "gone"}, 404)
+        c = get_chat(f["chat"])
+        if not c["folder_set"]:
+            return h.send_json({"error": "folder"}, 409)
+        if not any(x["dev"]["id"] == f["owner"] for x in CLIENTS):
+            return h.send_json({"error": "offline"}, 409)
+        if fid not in PENDING:
+            part = reserve(c["folder"], fid, f["size"])
+            if not part:
+                return h.send_json({"error": "no space"}, 507)
+            PENDING[fid] = {"chat": c["id"], "folder": c["folder"], "name": f["name"], "size": f["size"], "part": part,
+                            "final": "", "received": 0, "done": False, "busy": threading.Lock(), "hold": False,
+                            "touched": time.time(), "tick": 0.0, "fetch": True}
+    broadcast({"t": "fetch", "id": fid, "to": f["owner"], "name": f["name"], "mime": f["mime"], "size": f["size"]})
+    h.send_json({"ok": True})
+
+
+@route("POST", r"/api/local/fetch/(?P<fid>\w+)/stop", local=True)
+def r_fetchstop(h, fid):
+    f = file_row(fid)
+    if f:
+        broadcast({"t": "fetchstop", "id": fid, "to": f["owner"]})
+    end_transfer(fid, False)
     h.send_json({"ok": True})
 
 
@@ -809,6 +994,8 @@ def r_openfolder(h, cid):
         c = get_chat(cid)
     if not c:
         return h.send_json({"error": "no chat"}, 404)
+    if not c["folder"]:
+        return h.send_json({"error": "no folder"}, 409)
     os.makedirs(c["folder"], exist_ok=True)
     os.startfile(c["folder"])
     h.send_json({"ok": True})
@@ -944,16 +1131,11 @@ def quit_with_window():
                 os._exit(0)
 
 
-def writable_data_dir():
-    path = os.path.join(HERE, "data")
-    try:
-        os.makedirs(path, exist_ok=True)
-        with open(os.path.join(path, ".probe"), "wb"):
-            pass
-        os.remove(os.path.join(path, ".probe"))
-        return path
-    except OSError:     # e.g. the exe sits on a read-only drive
+def data_dir():
+    """The installed program lives in Program Files, which is read-only for it; each user's data stays in their profile."""
+    if FROZEN:
         return os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), APP_SLUG)
+    return os.path.join(HERE, "data")
 
 
 def main():
@@ -965,7 +1147,7 @@ def main():
     ap.add_argument("--lan-port", type=int, default=LAN_PORT)
     args = ap.parse_args()
     LOCAL_PORT, LAN_PORT = args.local_port, args.lan_port
-    DATA = args.data or writable_data_dir()
+    DATA = args.data or data_dir()
     os.makedirs(os.path.join(DATA, "thumbs"), exist_ok=True)
     run_file = os.path.join(DATA, "run.json")
 
@@ -988,7 +1170,10 @@ def main():
     url = f"http://127.0.0.1:{LOCAL_PORT}/?k={LOCAL_SECRET}"
     with open(run_file, "w", encoding="utf-8") as f:
         json.dump({"url": url}, f)
-    for target in (lan.serve_forever, janitor, beacon):
+    for c in DB.execute("SELECT id FROM chats WHERE folder_set=1").fetchall():
+        DIRTY.add(c["id"])      # chats from before history files existed get theirs now
+    DIRTY_WAKE.set()
+    for target in (lan.serve_forever, janitor, beacon, chat_saver):
         threading.Thread(target=target, daemon=True).start()
     print(url, flush=True)
     if not args.no_window:

@@ -3,6 +3,7 @@ package app.hotshot.chat;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.MediaMetadataRetriever;
@@ -38,12 +39,14 @@ final class Transfers {
         final String name;
         final long size;
         final String mime;
+        final boolean durable;      // still readable after a restart, so it can wait here until the laptop asks
 
-        Picked(Uri uri, String name, long size, String mime) {
+        Picked(Uri uri, String name, long size, String mime, boolean durable) {
             this.uri = uri;
             this.name = name;
             this.size = size;
             this.mime = mime;
+            this.durable = durable;
         }
     }
 
@@ -54,12 +57,14 @@ final class Transfers {
     private static final int BUFFER = 1 << 20;
     private static final int TRIES = 6;
     private static final long TICK_MS = 150;
+    private static final String CHAT_FILE = "HotShot-chat.json";
 
     private final Context ctx;
     private final ContentResolver cr;
     private final Prefs prefs;
     private final Sink sink;
     private final ExecutorService pool = Executors.newFixedThreadPool(3);
+    private final ExecutorService saver = Executors.newSingleThreadExecutor();
     private final AtomicInteger running = new AtomicInteger();
     private final Set<String> active = ConcurrentHashMap.newKeySet();
     private final Set<String> cancelled = ConcurrentHashMap.newKeySet();
@@ -156,26 +161,14 @@ final class Transfers {
         req.put("mime", f.mime);
         req.put("w", th == null ? 0 : th.w);
         req.put("h", th == null ? 0 : th.h);
+        req.put("canHold", f.durable);
         JSONObject res = Net.call(open("/api/files"), "POST", req);
         if (res.getInt("_status") != 200) {
             throw new IOException("create failed");
         }
         String fid = res.getString("id");
-        long off = 0;
-        for (int attempt = 1; ; attempt++) {
-            try {
-                putBytes(key, fid, f, off);
-                break;
-            } catch (Cancelled e) {
-                Net.call(open("/api/files/" + fid), "DELETE", null);
-                throw e;
-            } catch (IOException e) {
-                if (attempt >= TRIES) {
-                    throw e;
-                }
-                pause();
-                off = Net.call(open("/api/files/" + fid + "/status"), "GET", null).optLong("received", off);
-            }
+        if (!res.optBoolean("hold")) {      // held: only the thumbnail goes now, the bytes when the laptop asks
+            sendBytes(key, fid, f, 0);
         }
         if (th != null) {
             HttpsURLConnection c = open("/api/files/" + fid + "/thumb");
@@ -191,6 +184,58 @@ final class Transfers {
             throw new IOException("finish failed");
         }
         return fid;
+    }
+
+    private void sendBytes(String key, String fid, Picked f, long off) throws IOException {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                putBytes(key, fid, f, off);
+                return;
+            } catch (Cancelled e) {
+                Net.call(open("/api/files/" + fid), "DELETE", null);
+                throw e;
+            } catch (IOException e) {
+                if (attempt >= TRIES) {
+                    throw e;
+                }
+                pause();
+                off = Net.call(open("/api/files/" + fid + "/status"), "GET", null).optLong("received", off);
+            }
+        }
+    }
+
+    /** The laptop asked for a file this phone has been holding. */
+    void push(final String fid, final String name, final String mime, final long size) {
+        final String local = prefs.local(fid);
+        if (!active.add(fid)) {
+            return;
+        }
+        pool.execute(() -> {
+            began();
+            try {
+                if (local == null) {
+                    throw new IOException("not on this phone");
+                }
+                Picked f = new Picked(Uri.parse(local.substring(2)), name, size, mime, true);
+                long off = Net.call(open("/api/files/" + fid + "/status"), "GET", null).optLong("received", 0);
+                sendBytes(fid, fid, f, off);
+                if (Net.call(open("/api/files/" + fid + "/done"), "POST", null).optInt("_status") != 200) {
+                    throw new IOException("finish failed");
+                }
+            } catch (Cancelled e) {
+                // the laptop stopped it and already knows
+            } catch (IOException | RuntimeException e) {
+                try {
+                    Net.call(open("/api/files/" + fid + "/failed"), "POST", null);
+                } catch (IOException | RuntimeException ignored) {
+                    // the laptop notices the phone is gone by itself
+                }
+            } finally {
+                active.remove(fid);
+                cancelled.remove(fid);
+                ended();
+            }
+        });
     }
 
     private void putBytes(String key, String fid, Picked f, long off) throws IOException {
@@ -342,6 +387,74 @@ final class Transfers {
         if (got[0] != size) {
             throw new IOException("short download");
         }
+    }
+
+    // ── each chat's folder also holds the chat's history
+    private Uri findChatFile(Uri tree) {
+        String parent = DocumentsContract.getTreeDocumentId(tree);
+        Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parent);
+        String[] columns = {DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME};
+        try (Cursor c = cr.query(children, columns, null, null, null)) {
+            while (c != null && c.moveToNext()) {
+                if (CHAT_FILE.equals(c.getString(1))) {
+                    return DocumentsContract.buildDocumentUriUsingTree(tree, c.getString(0));
+                }
+            }
+        }
+        return null;
+    }
+
+    void saveChat(final String chat) {
+        saver.execute(() -> {
+            String folder = prefs.folder(chat);
+            if (folder == null) {
+                return;
+            }
+            try {
+                HttpsURLConnection c = open("/api/chats/" + chat + "/export");
+                if (c.getResponseCode() != 200) {
+                    return;
+                }
+                Uri tree = Uri.parse(folder);
+                Uri doc = findChatFile(tree);
+                if (doc == null) {
+                    Uri parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree));
+                    doc = DocumentsContract.createDocument(cr, parent, "application/json", CHAT_FILE);
+                }
+                if (doc == null) {
+                    return;
+                }
+                try (InputStream in = c.getInputStream(); OutputStream out = cr.openOutputStream(doc, "wt")) {
+                    if (out == null) {
+                        return;
+                    }
+                    byte[] buf = new byte[64 << 10];
+                    int n;
+                    while ((n = in.read(buf)) > 0) {
+                        out.write(buf, 0, n);
+                    }
+                }
+            } catch (IOException | RuntimeException ignored) {
+                // the next change writes it again
+            }
+        });
+    }
+
+    void dropChat(String chat) {
+        final String folder = prefs.folder(chat);
+        if (folder == null) {
+            return;
+        }
+        saver.execute(() -> {
+            try {
+                Uri doc = findChatFile(Uri.parse(folder));
+                if (doc != null) {
+                    DocumentsContract.deleteDocument(cr, doc);
+                }
+            } catch (IOException | RuntimeException ignored) {
+                // the folder itself is gone
+            }
+        });
     }
 
     // ── thumbnails: made here so the laptop never has to decode anything

@@ -10,7 +10,7 @@
 
 A Telegram-style chat for moving files between your Android phone and Windows PC, over nothing but your phone's hotspot.
 
-[![Download](https://img.shields.io/badge/Download-APK%20%26%20EXE-0b74ec?style=for-the-badge)](https://github.com/Mohammad13854224/HotShot/releases/latest)
+[![Download](https://img.shields.io/badge/Download-APK%20%26%20Setup-0b74ec?style=for-the-badge)](https://github.com/Mohammad13854224/HotShot/releases/latest)
 [![Build](https://img.shields.io/github/actions/workflow/status/Mohammad13854224/HotShot/build.yml?style=for-the-badge&label=build)](https://github.com/Mohammad13854224/HotShot/actions)
 
 [فارسی](#فارسی) · [English](#english)
@@ -24,7 +24,8 @@ A Telegram-style chat for moving files between your Android phone and Windows PC
 ### چرا HotShot؟
 
 - **بدون اینترنت:** اینترنت گوشی را خاموش کن. فقط هات‌اسپات لازم است و هیچ داده‌ای از دستگاه‌های خودت بیرون نمی‌رود.
-- **چند گفتگوی جدا:** هر گفتگو نام خودش و پوشه‌ی ذخیره‌ی خودش را روی هر دو دستگاه دارد.
+- **چند گفتگوی جدا:** هر گفتگو نام خودش و پوشه‌ی ذخیره‌ی خودش را روی هر دو دستگاه دارد و تا پوشه را انتخاب نکنی باز نمی‌شود. تاریخچه‌ی هر گفتگو هم در فایل `HotShot-chat.json` داخل همان پوشه ذخیره می‌شود.
+- **دریافت به انتخاب خودت:** برای هر گفتگو جدا تعیین کن گوشی و کامپیوتر فایل‌ها را خودکار بگیرند یا با زدن دکمه‌ی دانلود.
 - **همگام و زنده:** هر پیام یا تغییری همان لحظه روی دستگاه دیگر دیده می‌شود و برنامه فقط وقتی چیزی تغییر کند به‌روز می‌شود.
 - **بدون سقف سرعت:** فایل‌ها خام و مستقیم در پوشه‌ی گفتگو نوشته می‌شوند. سرعت را وای‌فای گوشی تعیین می‌کند، نه برنامه.
 - **امن:** همه‌ی ارتباط‌ها با TLS رمز می‌شوند. گوشی فقط با کد یک‌بارمصرف جفت می‌شود و بعد از آن فقط به گواهی همان کامپیوتر اعتماد می‌کند.
@@ -35,13 +36,13 @@ A Telegram-style chat for moving files between your Android phone and Windows PC
 
 از [صفحه‌ی دانلود](https://github.com/Mohammad13854224/HotShot/releases/latest) این دو فایل را بگیر:
 
-- `HotShot.exe` روی کامپیوتر: نصب نمی‌خواهد و داده‌هایش در پوشه‌ی `data` کنار خودش می‌ماند.
+- `HotShot-Setup.exe` روی کامپیوتر: برنامه را نصب می‌کند، میانبر می‌سازد و اجازه‌ی فایروال را هم خودش می‌گیرد. داده‌ها در `%LOCALAPPDATA%\HotShot` می‌مانند.
 - `HotShot.apk` روی گوشی: نسخه‌های بعدی روی همین نسخه نصب می‌شوند و داده‌ها می‌مانند.
 
 ### شروع
 
 1. هات‌اسپات گوشی را روشن کن و کامپیوتر را به آن وصل کن.
-2. `HotShot.exe` را باز کن. اگر ویندوز درباره‌ی فایروال پرسید، اجازه بده.
+2. HotShot را روی کامپیوتر باز کن.
 3. از منوی برنامه «اتصال گوشی» را بزن.
 4. اپ گوشی را باز کن و کد ۸ رقمی را وارد کن. این کار فقط یک‌بار لازم است.
 
@@ -60,7 +61,8 @@ A Telegram-style chat for moving files between your Android phone and Windows PC
 ### Why HotShot?
 
 - **No internet:** turn mobile data off. All it needs is the hotspot, and nothing leaves your own devices.
-- **Separate chats:** each chat has its own name and its own save folder on both devices.
+- **Separate chats:** each chat has its own name and its own save folder on both devices, and stays closed until a folder is chosen. Its history is also saved as `HotShot-chat.json` in that folder.
+- **Receive on your terms:** per chat, choose whether the phone and the PC take files automatically or wait for you to press download.
 - **Live sync:** messages and changes show up on the other device at once, and nothing refreshes unless something changed.
 - **No speed cap:** files go raw, straight into the chat's folder. Your Wi-Fi sets the speed, not the app.
 - **Secure:** everything is encrypted with TLS. The phone pairs once with a one-time code and then trusts only that computer's certificate.
@@ -71,13 +73,13 @@ A Telegram-style chat for moving files between your Android phone and Windows PC
 
 Get both files from the [latest release](https://github.com/Mohammad13854224/HotShot/releases/latest):
 
-- `HotShot.exe` for the PC: portable, it keeps its data in a `data` folder next to itself.
+- `HotShot-Setup.exe` for the PC: installs the program, adds shortcuts and sets up the firewall rule. Data lives in `%LOCALAPPDATA%\HotShot`.
 - `HotShot.apk` for the phone: later versions install over it and keep your data.
 
 ### Getting started
 
 1. Turn on the phone's hotspot and connect the PC to it.
-2. Open `HotShot.exe`. If Windows asks about the firewall, allow it.
+2. Open HotShot on the PC.
 3. Choose **Connect phone** from the menu.
 4. Open the phone app and enter the 8-digit code. You only do this once.
 
@@ -87,11 +89,11 @@ Android does not let apps pick the storage root or the Download folder itself, s
 
 ## Build
 
-Every push to `main` runs the server tests and builds `HotShot.exe` and `HotShot.apk` in GitHub Actions. A tag like `v1.0.0` publishes both as a release.
+Every push to `main` runs the server tests and builds `HotShot-Setup.exe` and `HotShot.apk` in GitHub Actions. A tag like `v1.0.0` publishes both as a release.
 
 To sign the APK with a fixed key, add two repository secrets: `SIGNING_KEY` (the key file in base64) and `SIGNING_PASSWORD`. The key never enters the repository.
 
-The [Vazirmatn](https://github.com/rastikerdar/vazirmatn) font is used under the SIL Open Font License.
+The [Vazirmatn](https://github.com/rastikerdar/vazirmatn) font is used under the SIL Open Font License. Emoji on the PC come from [Twemoji](https://github.com/jdecked/twemoji) (graphics CC BY 4.0) through the [twemoji-colr-font](https://www.npmjs.com/package/twemoji-colr-font) package; its licence is in `desktop/web/fonts/TWEMOJI-LICENSE.txt`.
 
 Run from source:
 

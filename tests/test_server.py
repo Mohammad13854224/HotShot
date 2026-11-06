@@ -16,6 +16,8 @@ ok_count = 0
 def check(cond, what):
     global ok_count
     if not cond:
+        if os.environ.get("GITHUB_ACTIONS"):
+            print(f"::error title=test::{what}")
         raise SystemExit(f"FAILED: {what}")
     ok_count += 1
     print("  ok ", what)
@@ -68,6 +70,16 @@ class Phone:
 
 def files_in(folder):
     return [n for n in os.listdir(folder) if not n.startswith(hotshot.CHAT_FILE)]
+
+
+def soon(test, seconds=8):
+    """Slow machines deliver events and write files later; a fixed sleep would make the checks flaky."""
+    end = time.time() + seconds
+    while time.time() < end:
+        if test():
+            return True
+        time.sleep(.05)
+    return bool(test())
 
 
 def hotshot_thumb(fid):
@@ -263,7 +275,7 @@ def run(url):
     hid = f["id"]
     check(f["hold"], "automatic receiving off: the phone keeps the file")
     before = set(files_in(folder))
-    st, r = phone.call("PUT", f"/api/files/{hid}/data?offset=0", data)
+    st, r = phone.call("PUT", f"/api/files/{hid}/data?offset=0", b"xx")
     check(st == 400, "a held file takes no bytes until the laptop asks")
     phone.call("PUT", f"/api/files/{hid}/thumb", b"\xff\xd8thumb")
     check(phone.call("POST", f"/api/files/{hid}/done")[0] == 200, "only the thumbnail travels")
@@ -276,24 +288,20 @@ def run(url):
     check(st == 403, "only the laptop's window can ask for a held file")
     st, r = desk.call("POST", f"/api/local/fetch/{hid}")
     check(st == 200, "the laptop asks for the file")
-    time.sleep(.1)
-    ask = [e for _, e in got if e["t"] == "fetch" and e["id"] == hid]
-    check(bool(ask), "the phone is told to send it")
+    check(soon(lambda: any(e["t"] == "fetch" and e["id"] == hid for _, e in got)), "the phone is told to send it")
     desk.call("POST", f"/api/local/fetch/{hid}/stop")
-    time.sleep(.1)
-    check(any(e["t"] == "fetchstop" for _, e in got) and any(e["t"] == "fetchend" for _, e in got), "the laptop can stop it")
+    check(soon(lambda: any(e["t"] == "fetchstop" for _, e in got) and any(e["t"] == "fetchend" for _, e in got)), "the laptop can stop it")
     check(desk.call("GET", f"/api/chats/{chat['id']}/messages")[1]["messages"][-1]["files"][0]["held"], "stopping keeps the message")
     check(os.path.exists(hotshot_thumb(hid)), "stopping keeps the thumbnail")
     desk.call("POST", f"/api/local/fetch/{hid}")
     phone.call("POST", f"/api/files/{hid}/failed")
-    time.sleep(.1)
-    check(any(e["t"] == "fetchend" and e.get("failed") for _, e in got), "a phone that lost the file says so")
+    check(soon(lambda: any(e["t"] == "fetchend" and e.get("failed") for _, e in got)), "a phone that lost the file says so")
     desk.call("POST", f"/api/local/fetch/{hid}")
     phone.call("PUT", f"/api/files/{hid}/data?offset=0", data[:1000])
     check(phone.call("GET", f"/api/files/{hid}/status")[1]["received"] == 1000, "the transfer can resume")
     phone.call("PUT", f"/api/files/{hid}/data?offset=1000", data[1000:])
     check(phone.call("POST", f"/api/files/{hid}/done")[0] == 200, "the phone finishes")
-    time.sleep(.1)
+    soon(lambda: any(e["t"] == "file" and e["file"]["id"] == hid for _, e in got))
     fin = [e for _, e in got if e["t"] == "file" and e["file"]["id"] == hid]
     check(fin and not fin[0]["file"]["held"] and fin[0]["file"]["got"], "both sides learn the file has arrived")
     st, body = desk.call("GET", f"/api/files/{hid}")
@@ -306,8 +314,9 @@ def run(url):
     phone.call("POST", f"/api/files/{f['id']}/done")
     phone.call("POST", f"/api/chats/{c2['id']}/messages", {"text": "از گوشی", "files": [f["id"]]})
     check(desk.call("POST", f"/api/local/fetch/{f['id']}")[0] == 409, "no fetching before a folder is chosen")
-    time.sleep(2.2)
     history = os.path.join(folder, hotshot.CHAT_FILE)
+    check(soon(lambda: os.path.exists(history)), "the history file is written")
+    time.sleep(2.5)     # let the latest change land too
     with open(history, encoding="utf-8") as fh:
         saved = json.load(fh)
     check(saved["app"] == "HotShot" and any(m["text"] == "سلام" for m in saved["messages"]), "the chat's folder holds its history")
@@ -315,19 +324,17 @@ def run(url):
     folder2 = os.path.join(tmp, "from phone")
     st, s2 = desk.call("PATCH", f"/api/chats/{c2['id']}", {"folder": folder2})
     check(st == 200 and s2["folderSet"], "choosing a folder opens the chat")
-    time.sleep(2.2)
-    check(os.path.exists(os.path.join(folder2, hotshot.CHAT_FILE)), "the history file appears in the chosen folder")
+    check(soon(lambda: os.path.exists(os.path.join(folder2, hotshot.CHAT_FILE))), "the history file appears in the chosen folder")
     st, c3 = desk.call("POST", "/api/chats", {"name": "برگشته", "folder": folder})
     rows = desk.call("GET", f"/api/chats/{c3['id']}/messages?limit=200")[1]["messages"]
     check(c3["count"] == len(saved["messages"]) and rows[0]["text"] == saved["messages"][0]["text"], "a folder with a history brings it back")
     with_file = [m for m in rows if m["files"] and not m["files"][0]["gone"]]
     check(bool(with_file), "restored messages find their files in the folder")
+    time.sleep(2.5)     # the restored chat's own write is out of the way
     desk.call("DELETE", f"/api/chats/{c3['id']}")
     check(not os.path.exists(history), "deleting a chat removes its history file")
-    time.sleep(2.2)     # the first chat's next change writes it again
     desk.call("PATCH", f"/api/chats/{chat['id']}", {"pinned": False})
-    time.sleep(2.2)
-    check(os.path.exists(history), "the remaining chat writes its history again")
+    check(soon(lambda: os.path.exists(history)), "the remaining chat writes its history again")
 
     print("speed (loopback: shows the program's own ceiling, not Wi-Fi)")
     size = 512 << 20
